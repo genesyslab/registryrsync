@@ -11,13 +11,13 @@ func TestFilteringOfARegistry(t *testing.T) {
 
 	Convey("Given a simple registry", t, func() {
 
-		dsn, closer, err := StartMysql()
+		ip, closer, err := StartRegistry()
 		So(err, ShouldBeNil)
 		So(closer, ShouldNotBeNil)
 
 		defer closer()
 
-		fmt.Printf("Dsn is %s", dsn)
+		fmt.Printf("ip is %s", ip)
 
 		Convey("With a simple filtering rule", func() {
 
