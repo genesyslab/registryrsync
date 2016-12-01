@@ -106,6 +106,12 @@ func StartRegistry() (address, func(), error) {
 			deferFn()
 			return address{}, nil, err
 		}
+
+		//localhost is by default I think marked as
+		//an insecure registry, and since this is just for tests ..
+		if hostIp == "0.0.0.0" {
+			hostIp = "localhost"
+		}
 		return address{hostIp, hostPort}, deferFn, nil
 	} else {
 		//Close it
