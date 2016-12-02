@@ -1,11 +1,20 @@
 package main
 
 import (
+	"os"
 	"testing"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
+
 	. "github.com/smartystreets/goconvey/convey"
 )
+
+func TestMain(m *testing.M) {
+	log.SetLevel(log.DebugLevel)
+	retCode := m.Run()
+	os.Exit(retCode)
+}
 
 func TestFilteringOfARegistry(t *testing.T) {
 
@@ -23,39 +32,59 @@ func TestFilteringOfARegistry(t *testing.T) {
 		regInfo := RegistryInfo{regAddr, "", "", true}
 
 		Convey("We can push images", func() {
-			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "unstable")
+			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "stable")
 			So(err, ShouldBeNil)
 			err = TagAndPush("alpine", regAddr.remoteName("mynamespace/alpine"), "0.1")
 			So(err, ShouldBeNil)
-			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "stable")
+			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "0.1")
 			So(err, ShouldBeNil)
-			err = TagAndPush("busybox", regAddr.remoteName("mynamespace/busybox"), "stable")
+			err = TagAndPush("busybox", regAddr.remoteName("mynamespace/busybox"), "0.1-stable")
 			So(err, ShouldBeNil)
 
 			Convey("We can get back image information from the registry", func() {
+
 				matchesAll := matchEverything{}
-				matches, err := GetMatchingImages(regInfo, matchesAll, matchesAll)
+				tagFilter, err := NewRegexTagFilter(".*stable")
+				namespaceFilter := NewNamespaceFilter("mynamespace")
 				So(err, ShouldBeNil)
-				expectedImages := []ImageIdentifier{
-					ImageIdentifier{"alpine", "stable"},
-					ImageIdentifier{"alpine", "unstable"},
-					ImageIdentifier{"mynamespace/alpine", "0.1"},
-					ImageIdentifier{"mynamespace/busybox", "stable"},
-				}
-				So(matches, ShouldResemble, expectedImages)
+				Convey("We can get back all the images", func() {
+					matches, err := GetMatchingImages(regInfo, matchesAll, matchesAll)
+					So(err, ShouldBeNil)
+					expectedImages := []ImageIdentifier{
+						ImageIdentifier{"alpine", "0.1"},
+						ImageIdentifier{"alpine", "stable"},
+						ImageIdentifier{"mynamespace/alpine", "0.1"},
+						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
+					}
+					So(matches, ShouldResemble, expectedImages)
+				})
+				Convey("We can get only images that are marked stable", func() {
+					matches, err := GetMatchingImages(regInfo, matchesAll, tagFilter)
+					So(err, ShouldBeNil)
+					expectedImages := []ImageIdentifier{
+						ImageIdentifier{"alpine", "stable"},
+						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
+					}
+					So(matches, ShouldResemble, expectedImages)
+				})
+				Convey("we can get all the images in a given namespace", func() {
+					matches, err := GetMatchingImages(regInfo, namespaceFilter, matchesAll)
+					So(err, ShouldBeNil)
+					expectedImages := []ImageIdentifier{
+						ImageIdentifier{"mynamespace/alpine", "0.1"},
+						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
+					}
+					So(matches, ShouldResemble, expectedImages)
+				})
+				Convey("we can get only images in a given namespace and given tags", func() {
+					matches, err := GetMatchingImages(regInfo, namespaceFilter, tagFilter)
+					So(err, ShouldBeNil)
+					expectedImages := []ImageIdentifier{
+						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
+					}
+					So(matches, ShouldResemble, expectedImages)
+				})
 			})
 		})
-
-		// Convey("With a simple filtering rule", func() {
-
-		// 	Convey("That has three images", nil)
-
-		// 	Convey("or Three Namespaces", nil)
-
-		// })
-
-		// Convey("or  Three Tags", nil)
-
 	})
-
 }

@@ -91,6 +91,8 @@ func (n *NamespaceFilter) MatchesRepo(repo string) bool {
 	pathParts := strings.Split(repo, "/")
 	if _, ok := n.namespaces[pathParts[0]]; ok {
 		return true
+	} else {
+		log.Debugf("Checking if repo %v is in %v", pathParts, n)
 	}
 	return false
 }
