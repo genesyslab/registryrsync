@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	docker "github.com/fsouza/go-dockerclient"
 )
@@ -36,7 +37,7 @@ func waitStarted(client *docker.Client, id string, maxWait time.Duration) error 
 		c, err := client.InspectContainer(id)
 		if err != nil {
 			//This is to be expected so probably will remove log message later
-			log.Println("Container not started %s %s", c, err)
+			log.Warnf("Container not started %s %s", c, err)
 			break
 		}
 		if c.State.Running {
@@ -57,7 +58,7 @@ func StartRegistry() (address, func(), error) {
 	}
 	c, err := client.CreateContainer(createOptions())
 
-	log.Printf("Container created %+v", c)
+	log.Debugf("Container created %+v", c)
 	if err != nil {
 		log.Fatal("Couldn't create even a basic container:", err)
 		return address{}, nil, err
@@ -67,7 +68,7 @@ func StartRegistry() (address, func(), error) {
 			ID:    c.ID,
 			Force: true,
 		}); err != nil {
-			log.Println("cannot remove container: %s", err)
+			log.Warnf("cannot remove container: %s", err)
 		}
 	}
 

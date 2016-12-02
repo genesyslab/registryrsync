@@ -5,7 +5,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/genesyslab/docker-registry-client/registry"
+	"github.com/heroku/docker-registry-client/registry"
 	//	"github.com/docker/distribution/manifest"
 
 	"github.com/golang/glog"
@@ -20,6 +20,10 @@ type RegistryInfo struct {
 type address struct {
 	HostIP string
 	Port   string
+}
+
+func (a address) remoteName(imageName string) string {
+	return fmt.Sprintf("%s:%s/%s", a.HostIP, a.Port, imageName)
 }
 
 type RegistryFactory interface {
@@ -83,12 +87,9 @@ func GetMatchingImages(regFactory RegistryFactory, filter ImageFilter) ([]ImageI
 	if err != nil {
 		return matchingImages, err
 	}
-
 	repos, err := reg.Repositories()
 	if err != nil {
-		fmt.Printf("cant get repositories from %s:%v. Got back %s", regFactory, err, matchingImages)
-		glog.Warningf("Unable to get repositories from %s:%s. Got back %s", regFactory, err, matchingImages)
-
+		fmt.Printf("cant get repositories from %s:%v. Got back %s", regFactory, err, repos)
 		return matchingImages, err
 	}
 	for _, repo := range repos {
@@ -106,30 +107,35 @@ func GetMatchingImages(regFactory RegistryFactory, filter ImageFilter) ([]ImageI
 			}
 		}
 	}
-
 	return matchingImages, nil
+}
+
+func TagImage(image string, taggedName string) error {
+	tagCmd := exec.Command("docker", "tag", image, taggedName)
+	data, err := tagCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error tagging %s:%s  Output %s", tagCmd.Args, err, string(data))
+		return err
+	}
+	return nil
 }
 
 //  "github.com/docker/distribution/digest"
 //     "github.com/docker/distribution/manifest"
 //     "github.com/docker/libtrust"
 
-func TagAndPush(imageName string, addr address, tag string) error {
-	remoteAddr := fmt.Sprintf("%s:%s/%s", addr.HostIP, addr.Port, imageName)
-
+func TagAndPush(imageName string, remoteAddr string, tag string) error {
 	if tag != "" {
 		remoteAddr = remoteAddr + ":" + tag
 	}
-	tagCmd := exec.Command("docker", "tag", imageName, remoteAddr)
-	data, err := tagCmd.CombinedOutput()
-
+	err := TagImage(imageName, remoteAddr)
 	if err != nil {
-		log.Printf("Error tagging %s:%s  Output %s", tagCmd.Args, err, string(data))
+		log.Printf("Error tagging %s:%s", imageName, remoteAddr)
 		return err
 	}
 
 	pushCmd := exec.Command("docker", "push", remoteAddr)
-	data, err = pushCmd.CombinedOutput()
+	data, err := pushCmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Error pushing %s:%s  Output %s", pushCmd.Args, err, string(data))
 		return err

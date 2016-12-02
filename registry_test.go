@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -21,19 +20,24 @@ func TestFilteringOfARegistry(t *testing.T) {
 		//it still would fail frequently but not always on a push.
 		//waiting a little seems to help
 		time.Sleep(1 * time.Second)
+		regInfo := RegistryInfo{regAddr, "", "", true}
 
-		Convey("We can push an image", func() {
-			err = TagAndPush("alpine", regAddr, "unstable")
-			if err != nil {
-				fmt.Printf("Didn't tag. Pausing for you to try yourself: %+v", err)
-			}
+		Convey("We can push images", func() {
+			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "unstable")
 			So(err, ShouldBeNil)
-			Convey("We can get back image information from the registry", func() {
-				regInfo := RegistryInfo{regAddr, "", "", true}
+			err = TagAndPush("alpine", regAddr.remoteName("mynamespace/alpine"), "0.1")
+			So(err, ShouldBeNil)
+			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "stable")
 
+			Convey("We can get back image information from the registry", func() {
 				matches, err := GetMatchingImages(regInfo, matchEverything{})
 				So(err, ShouldBeNil)
-				expectedImages := []ImageIdentifier{ImageIdentifier{"alpine", "unstable"}}
+
+				expectedImages := []ImageIdentifier{
+					ImageIdentifier{"alpine", "stable"},
+					ImageIdentifier{"alpine", "unstable"},
+					ImageIdentifier{"mynamespace/alpine", "0.1"},
+				}
 				So(matches, ShouldResemble, expectedImages)
 			})
 		})
