@@ -1,6 +1,6 @@
 SOURCEDIR= .
 SOURCES := $(shell find $(SOURCEDIR) -type f -name '*.go')
-BINARY=registrysync
+BINARY=registryrsync
 
 # H/T https://ariejan.net/2015/10/03/a-makefile-for-golang-cli-tools/
 # VERSION=1.0.0
@@ -8,7 +8,7 @@ BINARY=registrysync
 VERSION ?= 0.1
 BUILD_TIME=$(shell date +%FT%T%z)
 
-# LDFLAGS=-ldflags "-X github.com/jmahowald/registrysync/core.Version=${VERSION} -X github.com/jmahowald/registrysync/core.Version=${BUILD_TIME}"
+# LDFLAGS=-ldflags "-X github.com/jmahowald/registryrsync/core.Version=${VERSION} -X github.com/jmahowald/registryrsync/core.Version=${BUILD_TIME}"
 
 .DEFAULT_GOAL: $(BINARY)
 
@@ -34,14 +34,3 @@ test: $(BINARY)
 	go test .
 
 
-
-# TODO make this look into asssest directory
-# BUILDDIR := src/medliumls
-
-# build: vendor
-# 	cd $(BUILDDIR) && go build .
-# 	mkdir -p dist
-# 	mv $(BUILDDIR)/medliumls dist/medliumls
-
-# vendor:
-# 	cd $(BUILDDIR) && glide install
