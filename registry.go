@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
+	"regexp"
+	"strings"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/heroku/docker-registry-client/registry"
 	//	"github.com/docker/distribution/manifest"
@@ -56,9 +59,9 @@ type ImageIdentifier struct {
 	Tag  string
 }
 
-type ImageFilter interface {
-	RepositoryFilter
-	TagFilter
+type ImageFilter struct {
+	repoFilter RepositoryFilter
+	tagFilter  TagFilter
 }
 
 type RepositoryFilter interface {
@@ -67,6 +70,52 @@ type RepositoryFilter interface {
 
 type TagFilter interface {
 	MatchesTag(tag string) bool
+}
+
+//NamespaceFilter a filter for repositories
+//in a registry using a particular set of top level names.
+//these must be an exact match
+type NamespaceFilter struct {
+	namespaces map[string]struct{}
+}
+
+func NewNamespaceFilter(names ...string) *NamespaceFilter {
+	namespaceSet := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		namespaceSet[name] = struct{}{}
+	}
+	return &NamespaceFilter{namespaceSet}
+}
+
+func (n *NamespaceFilter) MatchesRepo(repo string) bool {
+	pathParts := strings.Split(repo, "/")
+	if _, ok := n.namespaces[pathParts[0]]; ok {
+		return true
+	}
+	return false
+}
+
+//RegexTagFilter structure that allows us to
+//filter only on particular patterns of labels
+//i.e. only things marked stable-.*
+type RegexTagFilter struct {
+	pattern *regexp.Regexp
+}
+
+//MatchesTag filters tags that match the regex
+func (r *RegexTagFilter) MatchesTag(tag string) bool {
+	return r.pattern.Match([]byte(tag))
+}
+
+//NewRegexTagFilter used to create filter for all versions of
+//a given
+func NewRegexTagFilter(regex string) (*RegexTagFilter, error) {
+	pattern, err := regexp.Compile(regex)
+	if err != nil {
+		log.Warnf("Couldn't compile to regex %s:%v", regex, err)
+		return nil, err
+	}
+	return &RegexTagFilter{pattern}, nil
 }
 
 type matchEverything struct{}
@@ -79,7 +128,7 @@ func (m matchEverything) MatchesTag(name string) bool {
 	return true
 }
 
-func GetMatchingImages(regFactory RegistryFactory, filter ImageFilter) ([]ImageIdentifier, error) {
+func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter) ([]ImageIdentifier, error) {
 
 	matchingImages := make([]ImageIdentifier, 0, 10)
 
@@ -94,14 +143,14 @@ func GetMatchingImages(regFactory RegistryFactory, filter ImageFilter) ([]ImageI
 	}
 	for _, repo := range repos {
 
-		if filter.MatchesRepo(repo) {
+		if repoFilter.MatchesRepo(repo) {
 			tags, err := reg.Tags(repo)
 			if err != nil {
 				log.Fatal("Unable to get tags", err)
 				return matchingImages, err
 			}
 			for _, tag := range tags {
-				if filter.MatchesTag(tag) {
+				if tagFilter.MatchesTag(tag) {
 					matchingImages = append(matchingImages, ImageIdentifier{repo, tag})
 				}
 			}

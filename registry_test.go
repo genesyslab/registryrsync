@@ -33,7 +33,8 @@ func TestFilteringOfARegistry(t *testing.T) {
 			So(err, ShouldBeNil)
 
 			Convey("We can get back image information from the registry", func() {
-				matches, err := GetMatchingImages(regInfo, matchEverything{})
+				matchesAll := matchEverything{}
+				matches, err := GetMatchingImages(regInfo, matchesAll, matchesAll)
 				So(err, ShouldBeNil)
 				expectedImages := []ImageIdentifier{
 					ImageIdentifier{"alpine", "stable"},
