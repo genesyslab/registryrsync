@@ -5,7 +5,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/heroku/docker-registry-client/registry"
+	"github.com/genesyslab/docker-registry-client/registry"
 	//	"github.com/docker/distribution/manifest"
 
 	"github.com/golang/glog"
@@ -16,6 +16,10 @@ type RegistryInfo struct {
 	username   string
 	password   string
 	isInsecure bool
+}
+type address struct {
+	HostIP string
+	Port   string
 }
 
 type RegistryFactory interface {
@@ -33,6 +37,7 @@ func (r RegistryInfo) GetRegistry() (*registry.Registry, error) {
 
 	regUrl := fmt.Sprintf("%s://%s:%s", protocol, r.address.HostIP, r.address.Port)
 	reg, err := registry.New(regUrl, r.username, r.password)
+
 	if err != nil {
 		//TODO should this be fatal?  maybe a warn.
 		glog.Warningf("Couldn't connect to registry %s:%s", regUrl, err)
@@ -58,6 +63,16 @@ type RepositoryFilter interface {
 
 type TagFilter interface {
 	MatchesTag(tag string) bool
+}
+
+type matchEverything struct{}
+
+func (m matchEverything) MatchesRepo(name string) bool {
+	return true
+}
+
+func (m matchEverything) MatchesTag(name string) bool {
+	return true
 }
 
 func GetMatchingImages(regFactory RegistryFactory, filter ImageFilter) ([]ImageIdentifier, error) {

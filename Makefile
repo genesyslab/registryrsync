@@ -13,7 +13,7 @@ BUILD_TIME=$(shell date +%FT%T%z)
 .DEFAULT_GOAL: $(BINARY)
 
 $(BINARY): $(SOURCES) vendor
-	go build ${LDFLAGS} -o ${BINARY} registry.go
+	go build ${LDFLAGS} -o ${BINARY} cli.go registry.go
 
 vendor:  
 	glide install

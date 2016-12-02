@@ -9,11 +9,6 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
-type address struct {
-	HostIP string
-	Port   string
-}
-
 // In the case of a single exposed port on a client will
 // return the appropraite connectivity information.  This is
 // needed becasue at least on OSX you CANT use the ips of the containers
