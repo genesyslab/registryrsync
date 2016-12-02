@@ -28,15 +28,18 @@ func TestFilteringOfARegistry(t *testing.T) {
 			err = TagAndPush("alpine", regAddr.remoteName("mynamespace/alpine"), "0.1")
 			So(err, ShouldBeNil)
 			err = TagAndPush("alpine", regAddr.remoteName("alpine"), "stable")
+			So(err, ShouldBeNil)
+			err = TagAndPush("busybox", regAddr.remoteName("mynamespace/busybox"), "stable")
+			So(err, ShouldBeNil)
 
 			Convey("We can get back image information from the registry", func() {
 				matches, err := GetMatchingImages(regInfo, matchEverything{})
 				So(err, ShouldBeNil)
-
 				expectedImages := []ImageIdentifier{
 					ImageIdentifier{"alpine", "stable"},
 					ImageIdentifier{"alpine", "unstable"},
 					ImageIdentifier{"mynamespace/alpine", "0.1"},
+					ImageIdentifier{"mynamespace/busybox", "stable"},
 				}
 				So(matches, ShouldResemble, expectedImages)
 			})
