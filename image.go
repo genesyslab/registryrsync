@@ -1,0 +1,36 @@
+package main
+
+import (
+	"log"
+	"os/exec"
+)
+
+type ImageIdentifier struct {
+	Name string
+	Tag  string
+}
+
+// Finds all the images that aren't in the target but are in the source
+func missingImages(source, target []ImageIdentifier) []ImageIdentifier {
+	diffs := make([]ImageIdentifier, 0, len(source))
+	vals := make(map[ImageIdentifier]int)
+	for _, s := range source {
+		vals[s] = 1
+	}
+	for _, t := range target {
+		if _, ok := vals[t]; !ok {
+			diffs = append(diffs, t)
+		}
+	}
+	return diffs
+}
+
+func tagImage(image string, taggedName string) error {
+	tagCmd := exec.Command("docker", "tag", image, taggedName)
+	data, err := tagCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error tagging %s:%s  Output %s", tagCmd.Args, err, string(data))
+		return err
+	}
+	return nil
+}
