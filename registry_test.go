@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	flag.Parse()
 	log.SetLevel(log.DebugLevel)
 	retCode := m.Run()
 	os.Exit(retCode)
@@ -17,6 +20,9 @@ func TestMain(m *testing.M) {
 
 func TestFilteringOfARegistry(t *testing.T) {
 
+	if testing.Short() {
+		t.Skip()
+	}
 	d := dockerCli{}
 	Convey("Given a simple but real registry", t, func() {
 
@@ -32,13 +38,13 @@ func TestFilteringOfARegistry(t *testing.T) {
 		regInfo := RegistryInfo{regAddr, "", "", true}
 
 		Convey("We can push images", func() {
-			err = d.TagAndPush("alpine", regAddr.remoteName("alpine"), "stable")
+			err = d.PullTagPush("alpine", "", regInfo.RemoteName(), "stable")
 			So(err, ShouldBeNil)
-			err = d.TagAndPush("alpine", regAddr.remoteName("mynamespace/alpine"), "0.1")
+			err = d.PullTagPush("alpine", "", regInfo.RemoteName()+"mynamespace/", "0.1")
 			So(err, ShouldBeNil)
-			err = d.TagAndPush("alpine", regAddr.remoteName("alpine"), "0.1")
+			err = d.PullTagPush("alpine", "", regInfo.RemoteName(), "0.1")
 			So(err, ShouldBeNil)
-			err = d.TagAndPush("busybox", regAddr.remoteName("mynamespace/busybox"), "0.1-stable")
+			err = d.PullTagPush("busybox", "", regInfo.RemoteName()+"mynamespace/", "0.1-stable")
 			So(err, ShouldBeNil)
 
 			Convey("We can get back image information from the registry", func() {
@@ -115,13 +121,15 @@ func (m mockRegistry) Tags(repo string) ([]string, error) {
 
 type tagAndPushRecorder struct {
 	records []tagAndPushRecord
-}
-type tagAndPushRecord struct {
-	imageName, remoteAddr, tag string
+	name    string
 }
 
-func (r tagAndPushRecorder) TagAndPush(imageName, remoteAddr, tag string) error {
-	r.records = append(r.records, tagAndPushRecord{imageName, remoteAddr, tag})
+type tagAndPushRecord struct {
+	imageName, sourceAddr, remoteAddr, tag string
+}
+
+func (r *tagAndPushRecorder) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
+	r.records = append(r.records, tagAndPushRecord{imageName, sourceReg, targetReg, tag})
 	return nil
 }
 
@@ -140,7 +148,7 @@ func TestConsolidate(t *testing.T) {
 		regTarget  RegistryFactory
 		repoFilter RepositoryFilter
 		tagFilter  TagFilter
-		handler    tagAndPushRecorder
+		handler    *tagAndPushRecorder
 	}
 	tests := []struct {
 		name    string
@@ -153,16 +161,18 @@ func TestConsolidate(t *testing.T) {
 		}, "registry.dev.com"},
 		mockRegistry{map[string][]string{
 			"production/tool1": {"0.1"},
-		}, "regisrtry.production.com"},
+		}, "registry.production.com"},
 		NewNamespaceFilter("production"),
 		regExFilter("[\\d\\.]+"),
-		tagAndPushRecorder{},
+		&tagAndPushRecorder{},
 	},
-		[]tagAndPushRecord{tagAndPushRecord{"production/tool1", "registry.production.com", "0.2"},
-			tagAndPushRecord{"production/tool2", "registry.production.com", "0.1"}}}}
+		[]tagAndPushRecord{tagAndPushRecord{"production/tool1", "registry.dev.com", "registry.production.com", "0.2"},
+			tagAndPushRecord{"production/tool2", "registry.dev.com", "registry.production.com", "0.1"}}}}
 	for _, tt := range tests {
 		Convey("for consolidation of:"+tt.name, t, func() {
 			Consolidate(tt.args.regSource, tt.args.regTarget, tt.args.repoFilter, tt.args.tagFilter, tt.args.handler)
+			fmt.Printf("hander %v", tt.args.handler)
+
 			So(tt.args.handler.records, ShouldResemble, tt.records)
 		})
 	}

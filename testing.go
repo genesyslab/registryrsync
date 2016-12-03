@@ -133,3 +133,13 @@ func createOptions() docker.CreateContainerOptions {
 
 	return opts
 }
+
+type matchEverything struct{}
+
+func (m matchEverything) MatchesRepo(name string) bool {
+	return true
+}
+
+func (m matchEverything) MatchesTag(name string) bool {
+	return true
+}

@@ -14,12 +14,12 @@ type ImageIdentifier struct {
 func missingImages(source, target []ImageIdentifier) []ImageIdentifier {
 	diffs := make([]ImageIdentifier, 0, len(source))
 	vals := make(map[ImageIdentifier]int)
-	for _, s := range source {
-		vals[s] = 1
-	}
 	for _, t := range target {
-		if _, ok := vals[t]; !ok {
-			diffs = append(diffs, t)
+		vals[t] = 1
+	}
+	for _, s := range source {
+		if _, ok := vals[s]; !ok {
+			diffs = append(diffs, s)
 		}
 	}
 	return diffs

@@ -34,7 +34,7 @@ type RegistryFactory interface {
 }
 
 func (r RegistryInfo) RemoteName() string {
-	return r.address.HostIP + ":" + r.address.Port
+	return r.address.HostIP + ":" + r.address.Port + "/"
 }
 func (r RegistryInfo) GetRegistry() (Registry, error) {
 
@@ -55,11 +55,6 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 	}
 	return reg, nil
 
-}
-
-type ImageIdentifier struct {
-	Name string
-	Tag  string
 }
 
 type RepositoryFilter interface {
@@ -118,16 +113,7 @@ func NewRegexTagFilter(regex string) (*RegexTagFilter, error) {
 	return &RegexTagFilter{pattern}, nil
 }
 
-type matchEverything struct{}
-
-func (m matchEverything) MatchesRepo(name string) bool {
-	return true
-}
-
-func (m matchEverything) MatchesTag(name string) bool {
-	return true
-}
-
+//Registry abstraction of a docker registry connection
 type Registry interface {
 	Repositories() ([]string, error)
 	Tags(string) ([]string, error)
@@ -164,26 +150,6 @@ func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, 
 	return matchingImages, nil
 }
 
-//ImagesSet - for comparing two registries, it's easier to use set logic
-func ImagesSet(images []ImageIdentifier) map[ImageIdentifier]struct{} {
-	imageSet := make(map[ImageIdentifier]struct{})
-	empty := struct{}{}
-	for _, image := range images {
-		imageSet[image] = empty
-	}
-	return imageSet
-}
-
-func tagImage(image string, taggedName string) error {
-	tagCmd := exec.Command("docker", "tag", image, taggedName)
-	data, err := tagCmd.CombinedOutput()
-	if err != nil {
-		log.Printf("Error tagging %s:%s  Output %s", tagCmd.Args, err, string(data))
-		return err
-	}
-	return nil
-}
-
 //TagAndPush given a basic image name, will add it to the remote repository with the given tag
 func (d dockerCli) TagAndPush(imageName string, remoteAddr string, tag string) error {
 	if tag != "" {
@@ -191,7 +157,7 @@ func (d dockerCli) TagAndPush(imageName string, remoteAddr string, tag string) e
 	}
 	err := tagImage(imageName, remoteAddr)
 	if err != nil {
-		log.Printf("Error tagging %s:%s", imageName, remoteAddr)
+		log.Warnf("Error tagging %s:%s", imageName, remoteAddr)
 		return err
 	}
 
@@ -205,18 +171,71 @@ func (d dockerCli) TagAndPush(imageName string, remoteAddr string, tag string) e
 
 }
 
-type dockerCli struct{}
+//TagAndPush given a basic image name, will add it to the remote repository with the given tag
+//note that is assumed that for remote registries the url
+//ends in a /  (this allows us to use the same logic to pull from docker hub, although there
+//are definetly smarter ways
+func (d dockerCli) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
 
-type TagAndPusher interface {
-	TagAndPush(imageName string, remoteAddr string, tag string) error
+	imageParts := strings.Split(imageName, ":")
+
+	// Should look into using gorouties and channels
+	pullCmd := exec.Command("docker", "pull", sourceReg+imageName)
+	data, err := pullCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error pulling %s:%s  Output %s", pullCmd.Args, err, string(data))
+		return err
+	}
+
+	imageId := imageParts[0]
+	if tag != "" {
+		imageId += ":" + tag
+	}
+	remoteName := targetReg + imageId
+	err = tagImage(imageName, remoteName)
+	if err != nil {
+		log.Warnf("Error tagging %s:%s", imageId, remoteName)
+		return err
+	}
+
+	pushCmd := exec.Command("docker", "push", remoteName)
+	data, err = pushCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Error pushing %s:%s  Output %s", pushCmd.Args, err, string(data))
+		return err
+	}
+
+	return nil
 }
 
-func Consolidate(regSource, regTarget RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter, handler TagAndPusher) {
+type dockerCli struct{}
+
+type ImageHandler interface {
+	PullTagPush(imageName, sourceReg, targetReg, tag string) error
+}
+
+func Consolidate(regSource, regTarget RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter, handler ImageHandler) error {
 
 	//This could easily take a while and we want to at the least log the time it took. In reality should probably
 	//push a metric somewhere
 	log.Infof(">>Consolidate(%s,%s,%v,%v", regSource.RemoteName(), regTarget.RemoteName(), repoFilter, tagFilter)
+	defer log.Info("<<Consolidate")
 
-	log.Info("<<Consolidate")
+	sourceImages, err := GetMatchingImages(regSource, repoFilter, tagFilter)
+	if err != nil {
+		log.Errorf("Couldn't get images from source repo %s : %s", regSource.RemoteName(), err)
+		return err
+	}
+	targetImages, err := GetMatchingImages(regTarget, repoFilter, tagFilter)
+	if err != nil {
+		log.Errorf("Couldn't get images from target repo %s : %s", regSource.RemoteName(), err)
+		return err
+	}
+	missingImages := missingImages(sourceImages, targetImages)
+	for _, image := range missingImages {
+		handler.PullTagPush(image.Name, regSource.RemoteName(), regTarget.RemoteName(), image.Tag)
+	}
+
+	return nil
 
 }
