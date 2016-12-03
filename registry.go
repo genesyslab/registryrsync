@@ -10,8 +10,6 @@ import (
 
 	"github.com/heroku/docker-registry-client/registry"
 	//	"github.com/docker/distribution/manifest"
-
-	"github.com/golang/glog"
 )
 
 type RegistryInfo struct {
@@ -29,11 +27,16 @@ func (a address) remoteName(imageName string) string {
 	return fmt.Sprintf("%s:%s/%s", a.HostIP, a.Port, imageName)
 }
 
+//RegistryFactory somethign that can give us pointers to registries
 type RegistryFactory interface {
-	GetRegistry() (*registry.Registry, error)
+	GetRegistry() (Registry, error)
+	RemoteName() string
 }
 
-func (r RegistryInfo) GetRegistry() (*registry.Registry, error) {
+func (r RegistryInfo) RemoteName() string {
+	return r.address.HostIP + ":" + r.address.Port
+}
+func (r RegistryInfo) GetRegistry() (Registry, error) {
 
 	var protocol string
 	if r.isInsecure {
@@ -47,7 +50,7 @@ func (r RegistryInfo) GetRegistry() (*registry.Registry, error) {
 
 	if err != nil {
 		//TODO should this be fatal?  maybe a warn.
-		glog.Warningf("Couldn't connect to registry %s:%s", regUrl, err)
+		log.Warnf("Couldn't connect to registry %s:%s", regUrl, err)
 		return nil, err
 	}
 	return reg, nil
@@ -57,11 +60,6 @@ func (r RegistryInfo) GetRegistry() (*registry.Registry, error) {
 type ImageIdentifier struct {
 	Name string
 	Tag  string
-}
-
-type ImageFilter struct {
-	repoFilter RepositoryFilter
-	tagFilter  TagFilter
 }
 
 type RepositoryFilter interface {
@@ -130,8 +128,13 @@ func (m matchEverything) MatchesTag(name string) bool {
 	return true
 }
 
-func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter) ([]ImageIdentifier, error) {
+type Registry interface {
+	Repositories() ([]string, error)
+	Tags(string) ([]string, error)
+}
 
+//GetMatchingImages Finds the names and tags of all matching
+func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter) ([]ImageIdentifier, error) {
 	matchingImages := make([]ImageIdentifier, 0, 10)
 
 	reg, err := regFactory.GetRegistry()
@@ -161,7 +164,17 @@ func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, 
 	return matchingImages, nil
 }
 
-func TagImage(image string, taggedName string) error {
+//ImagesSet - for comparing two registries, it's easier to use set logic
+func ImagesSet(images []ImageIdentifier) map[ImageIdentifier]struct{} {
+	imageSet := make(map[ImageIdentifier]struct{})
+	empty := struct{}{}
+	for _, image := range images {
+		imageSet[image] = empty
+	}
+	return imageSet
+}
+
+func tagImage(image string, taggedName string) error {
 	tagCmd := exec.Command("docker", "tag", image, taggedName)
 	data, err := tagCmd.CombinedOutput()
 	if err != nil {
@@ -171,15 +184,12 @@ func TagImage(image string, taggedName string) error {
 	return nil
 }
 
-//  "github.com/docker/distribution/digest"
-//     "github.com/docker/distribution/manifest"
-//     "github.com/docker/libtrust"
-
-func TagAndPush(imageName string, remoteAddr string, tag string) error {
+//TagAndPush given a basic image name, will add it to the remote repository with the given tag
+func (d dockerCli) TagAndPush(imageName string, remoteAddr string, tag string) error {
 	if tag != "" {
 		remoteAddr = remoteAddr + ":" + tag
 	}
-	err := TagImage(imageName, remoteAddr)
+	err := tagImage(imageName, remoteAddr)
 	if err != nil {
 		log.Printf("Error tagging %s:%s", imageName, remoteAddr)
 		return err
@@ -192,5 +202,21 @@ func TagAndPush(imageName string, remoteAddr string, tag string) error {
 		return err
 	}
 	return nil
+
+}
+
+type dockerCli struct{}
+
+type TagAndPusher interface {
+	TagAndPush(imageName string, remoteAddr string, tag string) error
+}
+
+func Consolidate(regSource, regTarget RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter, handler TagAndPusher) {
+
+	//This could easily take a while and we want to at the least log the time it took. In reality should probably
+	//push a metric somewhere
+	log.Infof(">>Consolidate(%s,%s,%v,%v", regSource.RemoteName(), regTarget.RemoteName(), repoFilter, tagFilter)
+
+	log.Info("<<Consolidate")
 
 }
