@@ -12,7 +12,7 @@ func main() {
 
 	r := RegistryInfo{address{host, port}, "", "", true}
 	matchesAll := matchEverything{}
-	ids, err := GetMatchingImages(r, matchesAll, matchesAll)
+	ids, err := GetMatchingImages(r, DockerImageFilter{matchesAll, matchesAll})
 
 	fmt.Printf("Got back images:%v or error:%v", ids, err)
 }

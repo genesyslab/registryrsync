@@ -49,12 +49,12 @@ func TestFilteringOfARegistry(t *testing.T) {
 
 			Convey("We can get back image information from the registry", func() {
 
-				matchesAll := matchEverything{}
 				tagFilter, err := NewRegexTagFilter(".*stable")
+				So(err, ShouldBeNil)
 				namespaceFilter := NewNamespaceFilter("mynamespace")
 				So(err, ShouldBeNil)
 				Convey("We can get back all the images", func() {
-					matches, err := GetMatchingImages(regInfo, matchesAll, matchesAll)
+					matches, err := GetMatchingImages(regInfo, DockerImageFilter{matchEverything{}, matchEverything{}})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"alpine", "0.1"},
@@ -65,7 +65,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("We can get only images that are marked stable", func() {
-					matches, err := GetMatchingImages(regInfo, matchesAll, tagFilter)
+					matches, err := GetMatchingImages(regInfo, DockerImageFilter{matchEverything{}, tagFilter})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"alpine", "stable"},
@@ -74,7 +74,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("we can get all the images in a given namespace", func() {
-					matches, err := GetMatchingImages(regInfo, namespaceFilter, matchesAll)
+					matches, err := GetMatchingImages(regInfo, DockerImageFilter{namespaceFilter, matchEverything{}})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"mynamespace/alpine", "0.1"},
@@ -83,7 +83,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("we can get only images in a given namespace and given tags", func() {
-					matches, err := GetMatchingImages(regInfo, namespaceFilter, tagFilter)
+					matches, err := GetMatchingImages(regInfo, DockerImageFilter{namespaceFilter, tagFilter})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
@@ -144,11 +144,10 @@ func regExFilter(pattern string) *RegexTagFilter {
 func TestConsolidate(t *testing.T) {
 
 	type args struct {
-		regSource  RegistryFactory
-		regTarget  RegistryFactory
-		repoFilter RepositoryFilter
-		tagFilter  TagFilter
-		handler    *tagAndPushRecorder
+		regSource RegistryFactory
+		regTarget RegistryFactory
+		filter    DockerImageFilter
+		handler   *tagAndPushRecorder
 	}
 	tests := []struct {
 		name    string
@@ -162,15 +161,18 @@ func TestConsolidate(t *testing.T) {
 		mockRegistry{map[string][]string{
 			"production/tool1": {"0.1"},
 		}, "registry.production.com"},
-		NewNamespaceFilter("production"),
-		regExFilter("[\\d\\.]+"),
+		DockerImageFilter{NewNamespaceFilter("production"),
+			regExFilter("[\\d\\.]+")},
 		&tagAndPushRecorder{},
 	},
-		[]tagAndPushRecord{tagAndPushRecord{"production/tool1", "registry.dev.com", "registry.production.com", "0.2"},
-			tagAndPushRecord{"production/tool2", "registry.dev.com", "registry.production.com", "0.1"}}}}
+		[]tagAndPushRecord{tagAndPushRecord{"production/tool1", "registry.dev.com",
+			"registry.production.com", "0.2"},
+			tagAndPushRecord{"production/tool2", "registry.dev.com",
+				"registry.production.com", "0.1"},
+		}}}
 	for _, tt := range tests {
 		Convey("for consolidation of:"+tt.name, t, func() {
-			Consolidate(tt.args.regSource, tt.args.regTarget, tt.args.repoFilter, tt.args.tagFilter, tt.args.handler)
+			Consolidate(tt.args.regSource, tt.args.regTarget, tt.args.filter, tt.args.handler)
 			fmt.Printf("hander %v", tt.args.handler)
 
 			So(tt.args.handler.records, ShouldResemble, tt.records)

@@ -57,6 +57,11 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 
 }
 
+type DockerImageFilter struct {
+	repoFilter RepositoryFilter
+	tagFilter  TagFilter
+}
+
 type RepositoryFilter interface {
 	MatchesRepo(repo string) bool
 }
@@ -120,7 +125,7 @@ type Registry interface {
 }
 
 //GetMatchingImages Finds the names and tags of all matching
-func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter) ([]ImageIdentifier, error) {
+func GetMatchingImages(regFactory RegistryFactory, filter DockerImageFilter) ([]ImageIdentifier, error) {
 	matchingImages := make([]ImageIdentifier, 0, 10)
 
 	reg, err := regFactory.GetRegistry()
@@ -134,14 +139,14 @@ func GetMatchingImages(regFactory RegistryFactory, repoFilter RepositoryFilter, 
 	}
 	for _, repo := range repos {
 
-		if repoFilter.MatchesRepo(repo) {
+		if filter.repoFilter.MatchesRepo(repo) {
 			tags, err := reg.Tags(repo)
 			if err != nil {
 				log.Fatal("Unable to get tags", err)
 				return matchingImages, err
 			}
 			for _, tag := range tags {
-				if tagFilter.MatchesTag(tag) {
+				if filter.tagFilter.MatchesTag(tag) {
 					matchingImages = append(matchingImages, ImageIdentifier{repo, tag})
 				}
 			}
@@ -214,19 +219,19 @@ type ImageHandler interface {
 	PullTagPush(imageName, sourceReg, targetReg, tag string) error
 }
 
-func Consolidate(regSource, regTarget RegistryFactory, repoFilter RepositoryFilter, tagFilter TagFilter, handler ImageHandler) error {
+func Consolidate(regSource, regTarget RegistryFactory, filter DockerImageFilter, handler ImageHandler) error {
 
 	//This could easily take a while and we want to at the least log the time it took. In reality should probably
 	//push a metric somewhere
-	log.Infof(">>Consolidate(%s,%s,%v,%v", regSource.RemoteName(), regTarget.RemoteName(), repoFilter, tagFilter)
+	log.Infof(">>Consolidate(%s,%s,%v,%v", regSource.RemoteName(), regTarget.RemoteName(), filter)
 	defer log.Info("<<Consolidate")
 
-	sourceImages, err := GetMatchingImages(regSource, repoFilter, tagFilter)
+	sourceImages, err := GetMatchingImages(regSource, filter)
 	if err != nil {
 		log.Errorf("Couldn't get images from source repo %s : %s", regSource.RemoteName(), err)
 		return err
 	}
-	targetImages, err := GetMatchingImages(regTarget, repoFilter, tagFilter)
+	targetImages, err := GetMatchingImages(regTarget, filter)
 	if err != nil {
 		log.Errorf("Couldn't get images from target repo %s : %s", regSource.RemoteName(), err)
 		return err
