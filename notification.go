@@ -37,17 +37,23 @@ type NotificationEventHandler interface {
 
 func registryEventHandler(handler NotificationEventHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
+		log.Infof("Got new request")
 		if r.Body == nil {
 			http.Error(w, "Please send a request body", 400)
 			return
 		}
+		log.Debugf("Processing Notification event")
+
 		var notification RegistryNotification
 		err := json.NewDecoder(r.Body).Decode(&notification)
 		if err != nil {
+			log.Warnf("Couldn't decode")
+
 			http.Error(w, err.Error(), 400)
 			return
 		}
+		log.Debugf("Got back events %v", notification)
+
 		for _, event := range notification.Events {
 			handler.Handle(event)
 		}
