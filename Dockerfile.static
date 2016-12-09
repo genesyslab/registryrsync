@@ -1,0 +1,29 @@
+# Create a minimal container to run a Golang static binary
+
+#Build directory: None
+#tag: cloud-workstation
+FROM gliderlabs/alpine:3.3
+
+MAINTAINER Josh Mahowald "joshua.mahowald@gmail.com"
+
+# Create a minimal container to run a Golang static binary
+
+#Build directory: None
+#tag: cloud-workstation
+FROM gliderlabs/alpine:3.3
+
+MAINTAINER Josh Mahowald "joshua.mahowald@gmail.com"
+
+#registrrsync uses docker cli and that in turn needs cacerts
+ARG DOCKER_URL=https://get.docker.com/builds/Linux/x86_64/docker-latest.tgz
+ARG BINARY=registryrsync
+RUN apk add --no-cache --update ca-certificates curl $DOCKER_URL && \
+  docker-latest.tgz > docker-latest.tgz \
+  && tar zxvf docker-latest.tgz \
+  && mv ./docker/docker /usr/local/bin \
+  && rm -rf ./docker
+
+ADD $BINARY /
+
+WORKDIR /data
+ENTRYPOINT "/$BINARY"
