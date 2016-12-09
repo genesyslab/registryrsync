@@ -1,18 +1,11 @@
 package main
 
-import (
-	"fmt"
-	"os"
-)
+// import clix "github.com/mkideal/cli/ext"
 
-func main() {
-	args := os.Args
-	host := args[1]
-	port := args[2]
+type argT struct {
+	// Time     clix.Time     `cli:"t" usage:"time"`
+	// Duration clix.Duration `cli:"d" usage:"duration"`
+}
 
-	r := RegistryInfo{address{host, port}, "", "", true}
-	matchesAll := matchEverything{}
-	ids, err := GetMatchingImages(r, DockerImageFilter{matchesAll, matchesAll})
-
-	fmt.Printf("Got back images:%v or error:%v", ids, err)
+func mymain() {
 }
