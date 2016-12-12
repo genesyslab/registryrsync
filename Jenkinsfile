@@ -9,7 +9,8 @@ node {
 
    wrap([$class: 'AnsiColorBuildWrapper']) {
      withDockerContainer(image:'pitchanon/jenkins-golang') {
-       sh 'go test .'
+      sh 'go version'
+      //  sh 'go test .'
       }
    }
 
