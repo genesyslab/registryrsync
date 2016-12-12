@@ -2,15 +2,16 @@ package: github.com/genesyslab/registryrsync
 import:
 - package: github.com/Sirupsen/logrus
   version: v0.11.0
-- package: github.com/docker/docker
-  version: v1.13.0-rc3
-  subpackages:
-  - client
-- package: github.com/fsouza/go-dockerclient
 - package: github.com/heroku/docker-registry-client
   subpackages:
   - registry
 testImport:
+- package: github.com/fsouza/go-dockerclient
+- package: github.com/docker/docker
+  version: v1.13.0-rc3
+  subpackages:
+  - api/types
+  - client
 - package: github.com/smartystreets/goconvey
   version: 1.6.2
   subpackages:
