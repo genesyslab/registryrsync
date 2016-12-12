@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	//	"github.com/docker/distribution/manifest"
 )
 
 //TagAndPush given a basic image name, will add it to the remote repository with the given tag

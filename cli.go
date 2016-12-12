@@ -7,5 +7,5 @@ type argT struct {
 	// Duration clix.Duration `cli:"d" usage:"duration"`
 }
 
-func mymain() {
+func main() {
 }

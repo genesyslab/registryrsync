@@ -1,6 +1,6 @@
 FROM golang
 
-ARG PROJ_GO_SRC=/go/src/github.com/genesyslab/registryrsync/
+ARG PROJ_GO_SRC=go/src/github.com/genesyslab/registryrsync/
 
 ADD Makefile /Makefile
 WORKDIR /
@@ -8,5 +8,5 @@ WORKDIR /
 ADD . $PROJ_GO_SRC
 # Hmmm, this seems renundant
 ADD ./vendor /vendor
-#RUN make buildgo
+RUN make buildgo
 CMD ["/bin/bash"]

@@ -4,10 +4,11 @@ BINARY=registryrsync
 ROOT_SOURCES := $(wildcard *.go)'
 DOCKER_TAG=genesyslab/$(BINARY)
 
-export PROJ_GO_SRC ?=/go/src/github.com/genesyslab/registryrsync/
+export PROJ_GO_SRC ?=go/src/github.com/genesyslab/registryrsync/
 
 .DEFAULT_GOAL: $(BINARY)
 
+export LINUXBINARY=registryrsync-linux
 $(BINARY): $(SOURCES) vendor
 	go build ${LDFLAGS} -o ${BINARY} $(ROOT_SOURCES)
 
@@ -39,14 +40,17 @@ test: $(BINARY)
 $(LINUXBINARY): $(SOURCES) vendor
 	$(MAKE) buildlinux
 
+buildtest:
+	go test ./$(PROJ_GO_SRC)
+
 buildgo:
-	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o $(LINUXBINARY) $(PROJ_GO_SRC)
+	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o $(LINUXBINARY) ./$(PROJ_GO_SRC)
 
 buildlinux: vendor
 	docker build -t build-$(BINARY) -f ./Dockerfile.build .
 	docker run -t build-$(BINARY) /bin/true
-	# docker cp `docker ps -q -n=1`:/$(LINUXBINARY) .
-	# chmod 755 ./$(LINUXBINARY)
+	docker cp `docker ps -q -n=1`:/$(LINUXBINARY) .
+	chmod 755 ./$(LINUXBINARY)
 
-builddocker:  $(LINUXBINARY)
-	docker build --rm=true --tag=joshmahowald/formterra -f Dockerfile.static .
+builddocker: $(LINUXBINARY)
+	docker build --build-arg LINUXBINARY=$(LINUXBINARY) --rm=true --tag=$(DOCKER_TAG) -f Dockerfile.static .
