@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -256,7 +258,7 @@ func (m mockRegistry) Tags(repo string) ([]string, error) {
 }
 
 type tagAndPushRecorder struct {
-	records []tagAndPushRecord
+	records tagRecords
 	name    string
 }
 
@@ -277,6 +279,31 @@ func regExFilter(pattern string) *RegexTagFilter {
 	return f
 }
 
+type tagRecords []tagAndPushRecord
+
+func (records tagRecords) Len() int {
+	return len(records)
+}
+
+func (records tagRecords) Less(i, j int) bool {
+	record1 := records[i]
+	record2 := records[j]
+
+	result := strings.Compare(record1.imageName, record2.imageName)
+	if result == 0 {
+		result = strings.Compare(record1.tag, record2.tag)
+	}
+	return result < 0
+
+}
+
+func (records tagRecords) Swap(i, j int) {
+	record1 := records[i]
+	record2 := records[j]
+	records[i] = record2
+	records[j] = record1
+}
+
 func TestConsolidate(t *testing.T) {
 
 	type args struct {
@@ -288,7 +315,7 @@ func TestConsolidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		records []tagAndPushRecord
+		records tagRecords
 	}{{"production filters", args{
 		mockRegistry{map[string][]string{
 			"production/tool1": {"0.1", "0.2"},
@@ -310,7 +337,8 @@ func TestConsolidate(t *testing.T) {
 		Convey("for consolidation of:"+tt.name, t, func() {
 			Consolidate(tt.args.regSource, tt.args.regTarget, tt.args.filter, tt.args.handler)
 			fmt.Printf("hander %v", tt.args.handler)
-
+			sort.Sort(tt.args.handler.records)
+			sort.Sort(tt.records)
 			So(tt.args.handler.records, ShouldResemble, tt.records)
 		})
 	}
