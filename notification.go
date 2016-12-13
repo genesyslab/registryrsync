@@ -23,20 +23,12 @@ type RegistryNotification struct {
 	Events []RegistryEvent
 }
 
-func unmarshall(data []byte) (notification *RegistryNotification, err error) {
-	err = json.Unmarshal(data, &notification)
-	if err != nil {
-		log.Warnf("Couldn't parse into a notification:%s", string(data))
-	}
-	return
-}
-
 type NotificationEventHandler interface {
 	Handle(event RegistryEvent) error
 }
 
-func registryEventHandler(handler NotificationEventHandler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func registryEventHandler(handler NotificationEventHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("Got new request")
 		if r.Body == nil {
 			http.Error(w, "Please send a request body", 400)
@@ -58,7 +50,7 @@ func registryEventHandler(handler NotificationEventHandler) http.Handler {
 			handler.Handle(event)
 		}
 		fmt.Fprintf(w, "Events processed")
-	})
+	}
 }
 
 // func GetRegistryEvents(reader io.Reader) (notification *RegistryNotification, err error) {
