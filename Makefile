@@ -1,7 +1,7 @@
 SOURCEDIR= .
 SOURCES := $(shell find $(SOURCEDIR) -type f -name '*.go')
 BINARY=registryrsync
-ROOT_SOURCES := $(wildcard *.go)'
+ROOT_SOURCES := $(wildcard *.go)
 DOCKER_TAG=genesyslab/$(BINARY)
 
 export PROJ_GO_SRC ?=go/src/github.com/genesyslab/registryrsync/
