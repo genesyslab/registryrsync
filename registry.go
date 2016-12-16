@@ -12,39 +12,34 @@ import (
 )
 
 type RegistryInfo struct {
-	address    address
+	address    string
 	username   string
 	password   string
 	isInsecure bool
 }
-type address struct {
-	HostIP string
-	Port   string
-}
 
-func (a address) remoteName(imageName string) string {
-	return fmt.Sprintf("%s:%s/%s", a.HostIP, a.Port, imageName)
-}
+// func (r RegistryInfo) Address() string {
+// 	return r.address
+// }
 
 //RegistryFactory somethign that can give us pointers to registries
 type RegistryFactory interface {
 	GetRegistry() (Registry, error)
-	RemoteName() string
+	Address() string
 }
 
-func (r RegistryInfo) RemoteName() string {
-	return r.address.HostIP + ":" + r.address.Port + "/"
+func NewRegistryInfo(url, username, password string) {
+
 }
 func (r RegistryInfo) GetRegistry() (Registry, error) {
-
 	var protocol string
-	if r.isInsecure {
+	if strings.Index(r.address, "localhost") == 0 {
 		protocol = "http"
 	} else {
 		protocol = "https"
 	}
 
-	regUrl := fmt.Sprintf("%s://%s:%s", protocol, r.address.HostIP, r.address.Port)
+	regUrl := fmt.Sprintf("%s://%s", protocol, r.address)
 	reg, err := registry.New(regUrl, r.username, r.password)
 
 	if err != nil {
@@ -124,16 +119,12 @@ type Registry interface {
 }
 
 //GetMatchingImages Finds the names and tags of all matching
-func GetMatchingImages(regFactory RegistryFactory, filter DockerImageFilter) ([]ImageIdentifier, error) {
+func GetMatchingImages(reg Registry, filter DockerImageFilter) ([]ImageIdentifier, error) {
 	matchingImages := make([]ImageIdentifier, 0, 10)
 
-	reg, err := regFactory.GetRegistry()
-	if err != nil {
-		return matchingImages, err
-	}
 	repos, err := reg.Repositories()
 	if err != nil {
-		fmt.Printf("cant get repositories from %s:%v. Got back %s", regFactory, err, repos)
+		fmt.Printf("cant get repositories from %s:%v. Got back %s", reg, err, repos)
 		return matchingImages, err
 	}
 	for _, repo := range repos {
@@ -154,26 +145,35 @@ func GetMatchingImages(regFactory RegistryFactory, filter DockerImageFilter) ([]
 	return matchingImages, nil
 }
 
-func Consolidate(regSource, regTarget RegistryFactory, filter DockerImageFilter, handler ImageHandler) error {
+func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler ImageHandler) error {
+
+	regSource, err := rs.GetRegistry()
+	if err != nil {
+		log.Errorf("Couldn't connect to source registry %v:%v", rs, err)
+	}
+	regTarget, err := rt.GetRegistry()
+	if err != nil {
+		log.Errorf("Couldn't connect to source registry %v:%v", rt, err)
+	}
 
 	//This could easily take a while and we want to at the least log the time it took. In reality should probably
 	//push a metric somewhere
-	log.Infof(">>Consolidate(%s,%s,%v,%v", regSource.RemoteName(), regTarget.RemoteName(), filter)
+	log.Infof(">>Consolidate(%v,%v,%v", regSource, regTarget, filter)
 	defer log.Info("<<Consolidate")
 
 	sourceImages, err := GetMatchingImages(regSource, filter)
 	if err != nil {
-		log.Errorf("Couldn't get images from source repo %s : %s", regSource.RemoteName(), err)
+		log.Errorf("Couldn't get images from source repo %v : %v", regSource, err)
 		return err
 	}
 	targetImages, err := GetMatchingImages(regTarget, filter)
 	if err != nil {
-		log.Errorf("Couldn't get images from target repo %s : %s", regSource.RemoteName(), err)
+		log.Errorf("Couldn't get images from target repo %s : %s", regTarget, err)
 		return err
 	}
 	missingImages := missingImages(sourceImages, targetImages)
 	for _, image := range missingImages {
-		handler.PullTagPush(image.Name, regSource.RemoteName(), regTarget.RemoteName(), image.Tag)
+		handler.PullTagPush(image.Name, rs.Address(), rt.Address(), image.Tag)
 	}
 
 	return nil

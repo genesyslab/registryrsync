@@ -56,17 +56,18 @@ func waitStarted(client *docker.Client, id string, maxWait time.Duration) error 
 //StartRegistry - starts a new registry, returning the ip port combination
 //and a closing function that you should use for cleanup.  Error of course if there is a problem
 
-func StartRegistry() (address, func(), error) {
+func StartRegistry() (RegistryInfo, func(), error) {
 	client, err := docker.NewClientFromEnv()
+	reg := RegistryInfo{}
 	if err != nil {
-		return address{}, nil, err
+		return reg, nil, err
 	}
 	c, err := client.CreateContainer(createOptions())
 
 	log.Debugf("Container created %+v", c)
 	if err != nil {
 		log.Fatal("Couldn't create even a basic container:", err)
-		return address{}, nil, err
+		return reg, nil, err
 	}
 	deferFn := func() {
 		if err := client.RemoveContainer(docker.RemoveContainerOptions{
@@ -81,17 +82,17 @@ func StartRegistry() (address, func(), error) {
 	if err != nil {
 		log.Fatalf("Could not start container %s : ", c, err)
 		deferFn()
-		return address{}, nil, err
+		return reg, nil, err
 	}
 
 	// wait for container to wake up
 	if err := waitStarted(client, c.ID, 5*time.Second); err != nil {
 		deferFn()
-		return address{}, nil, err
+		return reg, nil, err
 	}
 	if c, err = client.InspectContainer(c.ID); err != nil {
 		deferFn()
-		return address{}, nil, err
+		return reg, nil, err
 	}
 
 	ports := c.NetworkSettings.Ports
@@ -101,24 +102,26 @@ func StartRegistry() (address, func(), error) {
 	if portInfo, ok := ports[port]; ok && len(portInfo) >= 1 {
 		hostIp := portInfo[0].HostIP
 		hostPort := portInfo[0].HostPort
-		portAddress := hostIp + ":" + hostPort
-
-		if err := waitReachable(portAddress, 5*time.Second); err != nil {
-			deferFn()
-			return address{}, nil, err
-		}
-
 		//localhost is by default I think marked as
 		//an insecure registry, and since this is just for tests ..
 		if hostIp == "0.0.0.0" {
 			hostIp = "localhost"
 		}
-		return address{hostIp, hostPort}, deferFn, nil
+
+		portAddress := hostIp + ":" + hostPort
+
+		if err := waitReachable(portAddress, 5*time.Second); err != nil {
+			deferFn()
+			return reg, nil, err
+		}
+
+		reg.address = portAddress
+		return reg, deferFn, nil
 	} else {
 		//Close it
 		deferFn()
 
-		return address{}, nil, fmt.Errorf("Coudln't find port %v in ports %v settings %v", port, ports, c.NetworkSettings)
+		return reg, nil, fmt.Errorf("Coudln't find port %v in ports %v settings %v", port, ports, c.NetworkSettings)
 	}
 }
 
@@ -164,25 +167,27 @@ func TestFilteringOfARegistry(t *testing.T) {
 	d := dockerCli{}
 	Convey("Given a simple but real registry", t, func() {
 
-		regAddr, closer, err := StartRegistry()
+		regInfo, closer, err := StartRegistry()
 		So(err, ShouldBeNil)
 		So(closer, ShouldNotBeNil)
 		defer closer()
 
+		registry, err := regInfo.GetRegistry()
+
+		So(err, ShouldBeNil)
 		//Even though we only get here when the registry is listening on port 5000
 		//it still would fail frequently but not always on a push.
 		//waiting a little seems to help
 		time.Sleep(1 * time.Second)
-		regInfo := RegistryInfo{regAddr, "", "", true}
 
 		Convey("We can push images", func() {
-			err = d.PullTagPush("alpine", "", regInfo.RemoteName(), "stable")
+			err = d.PullTagPush("alpine", "", regInfo.address, "stable")
 			So(err, ShouldBeNil)
-			err = d.PullTagPush("alpine", "", regInfo.RemoteName()+"mynamespace/", "0.1")
+			err = d.PullTagPush("alpine", "", regInfo.address+"mynamespace/", "0.1")
 			So(err, ShouldBeNil)
-			err = d.PullTagPush("alpine", "", regInfo.RemoteName(), "0.1")
+			err = d.PullTagPush("alpine", "", regInfo.address, "0.1")
 			So(err, ShouldBeNil)
-			err = d.PullTagPush("busybox", "", regInfo.RemoteName()+"mynamespace/", "0.1-stable")
+			err = d.PullTagPush("busybox", "", regInfo.address+"mynamespace/", "0.1-stable")
 			So(err, ShouldBeNil)
 
 			Convey("We can get back image information from the registry", func() {
@@ -192,7 +197,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 				namespaceFilter := NewNamespaceFilter("mynamespace")
 				So(err, ShouldBeNil)
 				Convey("We can get back all the images", func() {
-					matches, err := GetMatchingImages(regInfo, DockerImageFilter{matchEverything{}, matchEverything{}})
+					matches, err := GetMatchingImages(registry, DockerImageFilter{matchEverything{}, matchEverything{}})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"alpine", "0.1"},
@@ -203,7 +208,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("We can get only images that are marked stable", func() {
-					matches, err := GetMatchingImages(regInfo, DockerImageFilter{matchEverything{}, tagFilter})
+					matches, err := GetMatchingImages(registry, DockerImageFilter{matchEverything{}, tagFilter})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"alpine", "stable"},
@@ -212,7 +217,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("we can get all the images in a given namespace", func() {
-					matches, err := GetMatchingImages(regInfo, DockerImageFilter{namespaceFilter, matchEverything{}})
+					matches, err := GetMatchingImages(registry, DockerImageFilter{namespaceFilter, matchEverything{}})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"mynamespace/alpine", "0.1"},
@@ -221,7 +226,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 					So(matches, ShouldResemble, expectedImages)
 				})
 				Convey("we can get only images in a given namespace and given tags", func() {
-					matches, err := GetMatchingImages(regInfo, DockerImageFilter{namespaceFilter, tagFilter})
+					matches, err := GetMatchingImages(registry, DockerImageFilter{namespaceFilter, tagFilter})
 					So(err, ShouldBeNil)
 					expectedImages := []ImageIdentifier{
 						ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
@@ -241,7 +246,7 @@ type mockRegistry struct {
 func (m mockRegistry) GetRegistry() (Registry, error) {
 	return m, nil
 }
-func (m mockRegistry) RemoteName() string {
+func (m mockRegistry) Address() string {
 	return m.url
 }
 
