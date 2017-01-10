@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -36,8 +37,15 @@ func (d dockerCli) PullTagPush(imageName, sourceReg, targetReg, tag string) erro
 
 	imageParts := strings.Split(imageName, ":")
 
+	var sourceImageAddr string
+	if sourceReg == "" {
+		sourceImageAddr = imageName
+	} else {
+		sourceImageAddr = fmt.Sprintf("%s/%s", sourceReg, imageName)
+	}
+
 	// Should look into using gorouties and channels
-	pullCmd := exec.Command("docker", "pull", sourceReg+imageName)
+	pullCmd := exec.Command("docker", "pull", sourceImageAddr)
 	data, err := pullCmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Error pulling %s:%s  Output %s", pullCmd.Args, err, string(data))
@@ -48,10 +56,10 @@ func (d dockerCli) PullTagPush(imageName, sourceReg, targetReg, tag string) erro
 	if tag != "" {
 		imageId += ":" + tag
 	}
-	remoteName := targetReg + imageId
+	remoteName := fmt.Sprintf("%s/%s", targetReg, imageId)
 	err = tagImage(imageName, remoteName)
 	if err != nil {
-		log.Warnf("Error tagging %s:%s", imageId, remoteName)
+		log.Warnf("Error tagging %s - %s", remoteName, err)
 		return err
 	}
 

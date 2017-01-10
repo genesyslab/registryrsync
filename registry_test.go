@@ -172,24 +172,26 @@ func TestFilteringOfARegistry(t *testing.T) {
 		So(closer, ShouldNotBeNil)
 		defer closer()
 
-		registry, err := regInfo.GetRegistry()
-
-		So(err, ShouldBeNil)
 		//Even though we only get here when the registry is listening on port 5000
 		//it still would fail frequently but not always on a push.
 		//waiting a little seems to help
 		time.Sleep(1 * time.Second)
+		registry, err := regInfo.GetRegistry()
+
+		So(err, ShouldBeNil)
 
 		Convey("We can push images", func() {
 			err = d.PullTagPush("alpine", "", regInfo.address, "stable")
 			So(err, ShouldBeNil)
-			err = d.PullTagPush("alpine", "", regInfo.address+"mynamespace/", "0.1")
+			err = d.PullTagPush("alpine", "", regInfo.address+"/mynamespace", "0.1")
 			So(err, ShouldBeNil)
 			err = d.PullTagPush("alpine", "", regInfo.address, "0.1")
 			So(err, ShouldBeNil)
-			err = d.PullTagPush("busybox", "", regInfo.address+"mynamespace/", "0.1-stable")
+			err = d.PullTagPush("busybox", "", regInfo.address+"/mynamespace", "0.1-stable")
 			So(err, ShouldBeNil)
 
+			// TODO move the above into a setup method so that it's not run for each of the below
+			// tests cases or do a better job of mocking things out
 			Convey("We can get back image information from the registry", func() {
 
 				tagFilter, err := NewRegexTagFilter(".*stable")

@@ -40,11 +40,13 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 	}
 
 	regUrl := fmt.Sprintf("%s://%s", protocol, r.address)
+	log.Infof("Connecting to registry %s:%s", regUrl)
+
 	reg, err := registry.New(regUrl, r.username, r.password)
 
 	if err != nil {
 		//TODO should this be fatal?  maybe a warn.
-		log.Warnf("Couldn't connect to registry %s:%s", regUrl, err)
+		log.Errorf("Couldn't connect to registry %s:%s", regUrl, err)
 		return nil, err
 	}
 	return reg, nil
