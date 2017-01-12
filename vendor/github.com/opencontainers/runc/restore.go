@@ -83,6 +83,9 @@ using the runc checkpoint command.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
+		if err := checkArgs(context, 1, exactArgs); err != nil {
+			return err
+		}
 		imagePath := context.String("image-path")
 		id := context.Args().First()
 		if id == "" {
@@ -147,7 +150,7 @@ func restoreContainer(context *cli.Context, spec *specs.Spec, config *configs.Co
 
 	setManageCgroupsMode(context, options)
 
-	if err := setEmptyNsMask(context, options); err != nil {
+	if err = setEmptyNsMask(context, options); err != nil {
 		return -1, err
 	}
 
@@ -173,8 +176,8 @@ func restoreContainer(context *cli.Context, spec *specs.Spec, config *configs.Co
 	}
 	if pidFile := context.String("pid-file"); pidFile != "" {
 		if err := createPidFile(pidFile, process); err != nil {
-			process.Signal(syscall.SIGKILL)
-			process.Wait()
+			_ = process.Signal(syscall.SIGKILL)
+			_, _ = process.Wait()
 			return -1, err
 		}
 	}
