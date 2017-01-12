@@ -17,6 +17,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/cobra/cmd"
@@ -31,6 +34,8 @@ func main() {
 
 var registrySource, registryTarget RegistryInfo
 var tagFilter, namespaceFilter string
+var pollingFrequency time.Duration
+var port int
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -38,11 +43,22 @@ var RootCmd = &cobra.Command{
 	Short: "Simple tool to help keep registries in sync",
 	Long: `
 
-	registrysync --source-url <registrysource> --source-user <u> --source-password <p> --target-user
+	registrysync --source-url <registrysource>  --target-url
 	`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+
+		if registrySource.address == "" {
+			cmd.Usage()
+			log.Error("No source registry address specified")
+		}
+		if registryTarget.address == "" {
+			cmd.Usage()
+			log.Error("No target registry address specified")
+		}
+
+	},
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.
@@ -67,6 +83,8 @@ func init() {
 
 	RootCmd.PersistentFlags().StringVar(&tagFilter, "tag-regex", ".*", "regular expression of tags to match")
 	RootCmd.PersistentFlags().StringVar(&namespaceFilter, "namespace-regex", ".*", "regex for the repositories and namespaces to match")
+
+	RootCmd.PersistentFlags().IntVar(&port, "port", 8787, "port to listen for notifications on")
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags, which, if defined here,

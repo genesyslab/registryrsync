@@ -8,26 +8,30 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-// RegistryEvent
+// RegistryEvent indication that some image changed in some way
 type RegistryEvent struct {
+	// TODO create an enum
 	Action string
 	Target RegistryTarget
 }
 
+// RegistryTarget Indicates the precise image
 type RegistryTarget struct {
 	Repository string
 	Tag        string
 }
 
-type RegistryNotification struct {
+// RegistryEvents a single notification may have many events
+type RegistryEvents struct {
 	Events []RegistryEvent
 }
 
-type NotificationEventHandler interface {
+// RegistryEventHandler how to process a registry event
+type RegistryEventHandler interface {
 	Handle(event RegistryEvent) error
 }
 
-func registryEventHandler(handler NotificationEventHandler) http.HandlerFunc {
+func registryEventHandler(handler RegistryEventHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("Got new request")
 		if r.Body == nil {
@@ -36,17 +40,17 @@ func registryEventHandler(handler NotificationEventHandler) http.HandlerFunc {
 		}
 		log.Debugf("Processing Notification event")
 
-		var notification RegistryNotification
-		err := json.NewDecoder(r.Body).Decode(&notification)
+		var events RegistryEvents
+		err := json.NewDecoder(r.Body).Decode(&events)
 		if err != nil {
 			log.Warnf("Couldn't decode")
 
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		log.Debugf("Got back events %v", notification)
+		log.Debugf("Got back events %v", events)
 
-		for _, event := range notification.Events {
+		for _, event := range events.Events {
 			handler.Handle(event)
 		}
 		fmt.Fprintf(w, "Events processed")

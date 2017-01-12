@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -11,6 +10,7 @@ import (
 	//	"github.com/docker/distribution/manifest"
 )
 
+// RegistryInfo connection information to speak with a docker registry
 type RegistryInfo struct {
 	address    string
 	username   string
@@ -18,19 +18,19 @@ type RegistryInfo struct {
 	isInsecure bool
 }
 
-// func (r RegistryInfo) Address() string {
-// 	return r.address
-// }
-
 //RegistryFactory somethign that can give us pointers to registries
 type RegistryFactory interface {
 	GetRegistry() (Registry, error)
 	Address() string
 }
 
-func NewRegistryInfo(url, username, password string) {
-
+//Registry abstraction of a docker registry connection
+type Registry interface {
+	Repositories() ([]string, error)
+	Tags(string) ([]string, error)
 }
+
+// GetRegistry gets an actual registry with repositories and tags
 func (r RegistryInfo) GetRegistry() (Registry, error) {
 	var protocol string
 	if strings.Index(r.address, "localhost") == 0 {
@@ -39,85 +39,18 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 		protocol = "https"
 	}
 
-	regUrl := fmt.Sprintf("%s://%s", protocol, r.address)
-	log.Infof("Connecting to registry %s:%s", regUrl)
+	regURL := fmt.Sprintf("%s://%s", protocol, r.address)
+	log.Infof("Connecting to registry %s:%s", regURL)
 
-	reg, err := registry.New(regUrl, r.username, r.password)
+	reg, err := registry.New(regURL, r.username, r.password)
 
 	if err != nil {
 		//TODO should this be fatal?  maybe a warn.
-		log.Errorf("Couldn't connect to registry %s:%s", regUrl, err)
+		log.Errorf("Couldn't connect to registry %s:%s", regURL, err)
 		return nil, err
 	}
 	return reg, nil
 
-}
-
-type DockerImageFilter struct {
-	repoFilter RepositoryFilter
-	tagFilter  TagFilter
-}
-
-type RepositoryFilter interface {
-	MatchesRepo(repo string) bool
-}
-
-type TagFilter interface {
-	MatchesTag(tag string) bool
-}
-
-//NamespaceFilter a filter for repositories
-//in a registry using a particular set of top level names.
-//these must be an exact match
-type NamespaceFilter struct {
-	namespaces map[string]struct{}
-}
-
-func NewNamespaceFilter(names ...string) *NamespaceFilter {
-	namespaceSet := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		namespaceSet[name] = struct{}{}
-	}
-	return &NamespaceFilter{namespaceSet}
-}
-
-func (n *NamespaceFilter) MatchesRepo(repo string) bool {
-	pathParts := strings.Split(repo, "/")
-	if _, ok := n.namespaces[pathParts[0]]; ok {
-		return true
-	} else {
-		log.Debugf("Checking if repo %v is in %v", pathParts, n)
-	}
-	return false
-}
-
-//RegexTagFilter structure that allows us to
-//filter only on particular patterns of labels
-//i.e. only things marked stable-.*
-type RegexTagFilter struct {
-	pattern *regexp.Regexp
-}
-
-//MatchesTag filters tags that match the regex
-func (r *RegexTagFilter) MatchesTag(tag string) bool {
-	return r.pattern.Match([]byte(tag))
-}
-
-//NewRegexTagFilter used to create filter for all versions of
-//a given
-func NewRegexTagFilter(regex string) (*RegexTagFilter, error) {
-	pattern, err := regexp.Compile(regex)
-	if err != nil {
-		log.Warnf("Couldn't compile to regex %s:%v", regex, err)
-		return nil, err
-	}
-	return &RegexTagFilter{pattern}, nil
-}
-
-//Registry abstraction of a docker registry connection
-type Registry interface {
-	Repositories() ([]string, error)
-	Tags(string) ([]string, error)
 }
 
 //GetMatchingImages Finds the names and tags of all matching
@@ -130,15 +63,14 @@ func GetMatchingImages(reg Registry, filter DockerImageFilter) ([]ImageIdentifie
 		return matchingImages, err
 	}
 	for _, repo := range repos {
-
-		if filter.repoFilter.MatchesRepo(repo) {
+		if filter.repoFilter.Matches(repo) {
 			tags, err := reg.Tags(repo)
 			if err != nil {
 				log.Fatal("Unable to get tags", err)
 				return matchingImages, err
 			}
 			for _, tag := range tags {
-				if filter.tagFilter.MatchesTag(tag) {
+				if filter.tagFilter.Matches(tag) {
 					matchingImages = append(matchingImages, ImageIdentifier{repo, tag})
 				}
 			}
@@ -147,8 +79,8 @@ func GetMatchingImages(reg Registry, filter DockerImageFilter) ([]ImageIdentifie
 	return matchingImages, nil
 }
 
-func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler ImageHandler) error {
-
+//Consolidate  finds the missing images in the target from the source and fires off events for those
+func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler RegistryEventHandler) error {
 	regSource, err := rs.GetRegistry()
 	if err != nil {
 		log.Errorf("Couldn't connect to source registry %v:%v", rs, err)
@@ -157,12 +89,10 @@ func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler Image
 	if err != nil {
 		log.Errorf("Couldn't connect to source registry %v:%v", rt, err)
 	}
-
 	//This could easily take a while and we want to at the least log the time it took. In reality should probably
 	//push a metric somewhere
 	log.Infof(">>Consolidate(%v,%v,%v", regSource, regTarget, filter)
 	defer log.Info("<<Consolidate")
-
 	sourceImages, err := GetMatchingImages(regSource, filter)
 	if err != nil {
 		log.Errorf("Couldn't get images from source repo %v : %v", regSource, err)
@@ -175,9 +105,8 @@ func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler Image
 	}
 	missingImages := missingImages(sourceImages, targetImages)
 	for _, image := range missingImages {
-		handler.PullTagPush(image.Name, rs.Address(), rt.Address(), image.Tag)
+		handler.Handle(RegistryEvent{"missing", RegistryTarget{image.Name, image.Tag}})
 	}
-
 	return nil
 
 }

@@ -31,11 +31,8 @@ docs: $(DOC_SOURCES)
 test: $(BINARY)
 	go test .
 
-
-
 	# This section is used to create a relatively minimal docker image
 	# Thx - https://developer.atlassian.com/blog/2015/07/osx-static-golang-binaries-with-docker/
-
 
 $(LINUXBINARY): $(SOURCES) vendor
 	$(MAKE) buildlinux

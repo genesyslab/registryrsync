@@ -70,7 +70,7 @@ func StartRegistry() (RegistryInfo, func(), error) {
 		return reg, nil, err
 	}
 	deferFn := func() {
-		if err := client.RemoveContainer(docker.RemoveContainerOptions{
+		if err = client.RemoveContainer(docker.RemoveContainerOptions{
 			ID:    c.ID,
 			Force: true,
 		}); err != nil {
@@ -80,13 +80,13 @@ func StartRegistry() (RegistryInfo, func(), error) {
 
 	err = client.StartContainer(c.ID, nil)
 	if err != nil {
-		log.Fatalf("Could not start container %s : ", c, err)
+		log.Fatalf("Could not start container %v : %s", c, err)
 		deferFn()
 		return reg, nil, err
 	}
 
 	// wait for container to wake up
-	if err := waitStarted(client, c.ID, 5*time.Second); err != nil {
+	if err = waitStarted(client, c.ID, 5*time.Second); err != nil {
 		deferFn()
 		return reg, nil, err
 	}
@@ -100,15 +100,14 @@ func StartRegistry() (RegistryInfo, func(), error) {
 	//but we don't know what it will actually be mapped to when testing
 	port := docker.Port("5000/tcp")
 	if portInfo, ok := ports[port]; ok && len(portInfo) >= 1 {
-		hostIp := portInfo[0].HostIP
+		hostIP := portInfo[0].HostIP
 		hostPort := portInfo[0].HostPort
 		//localhost is by default I think marked as
 		//an insecure registry, and since this is just for tests ..
-		if hostIp == "0.0.0.0" {
-			hostIp = "localhost"
+		if hostIP == "0.0.0.0" {
+			hostIP = "localhost"
 		}
-
-		portAddress := hostIp + ":" + hostPort
+		portAddress := hostIP + ":" + hostPort
 
 		if err := waitReachable(portAddress, 5*time.Second); err != nil {
 			deferFn()
@@ -117,12 +116,9 @@ func StartRegistry() (RegistryInfo, func(), error) {
 
 		reg.address = portAddress
 		return reg, deferFn, nil
-	} else {
-		//Close it
-		deferFn()
-
-		return reg, nil, fmt.Errorf("Coudln't find port %v in ports %v settings %v", port, ports, c.NetworkSettings)
 	}
+	deferFn()
+	return reg, nil, fmt.Errorf("Coudln't find port %v in ports %v settings %v", port, ports, c.NetworkSettings)
 }
 
 func createOptions() docker.CreateContainerOptions {
@@ -144,11 +140,7 @@ func createOptions() docker.CreateContainerOptions {
 
 type matchEverything struct{}
 
-func (m matchEverything) MatchesRepo(name string) bool {
-	return true
-}
-
-func (m matchEverything) MatchesTag(name string) bool {
+func (m matchEverything) Matches(name string) bool {
 	return true
 }
 
@@ -240,10 +232,29 @@ func TestFilteringOfARegistry(t *testing.T) {
 	})
 }
 
+//
 type mockRegistry struct {
 	entries map[string][]string
 	url     string
 }
+
+//
+// type mockRegistry struct {
+// 	repositories []string
+// 	tags         map[string][]string
+// }
+//
+// func (r mockRegistry) Repositories() ([]string, error) {
+// 	return r.repositories, nil
+// }
+//
+// func (r mockRegistry) Tags(repo string) ([]string, error) {
+// 	if tags, ok := r.tags[repo]; ok {
+// 		return tags, nil
+// 	} else {
+// 		return []string{}, nil
+// 	}
+// }
 
 func (m mockRegistry) GetRegistry() (Registry, error) {
 	return m, nil
@@ -265,18 +276,29 @@ func (m mockRegistry) Tags(repo string) ([]string, error) {
 }
 
 type tagAndPushRecorder struct {
-	records tagRecords
-	name    string
+	events RegistryEvents
+	name   string
 }
 
 type tagAndPushRecord struct {
 	imageName, sourceAddr, remoteAddr, tag string
 }
 
-func (r *tagAndPushRecorder) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
-	r.records = append(r.records, tagAndPushRecord{imageName, sourceReg, targetReg, tag})
+func (r *tagAndPushRecorder) Handle(evt RegistryEvent) error {
+	r.events.Events = append(r.events.Events, evt)
 	return nil
 }
+
+//
+// func (r *tagAndPushRecorder) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
+// 	r.events = append(r.records, tagAndPushRecord{imageName, sourceReg, targetReg, tag})
+// 	return nil
+// }
+//
+// func (r *tagAndPushRecorder) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
+// 	r.records = append(r.records, tagAndPushRecord{imageName, sourceReg, targetReg, tag})
+// 	return nil
+// }
 
 func regExFilter(pattern string) *RegexTagFilter {
 	f, err := NewRegexTagFilter(pattern)
@@ -286,29 +308,27 @@ func regExFilter(pattern string) *RegexTagFilter {
 	return f
 }
 
-type tagRecords []tagAndPushRecord
-
-func (records tagRecords) Len() int {
-	return len(records)
+func (n RegistryEvents) Len() int {
+	return len(n.Events)
 }
 
-func (records tagRecords) Less(i, j int) bool {
-	record1 := records[i]
-	record2 := records[j]
+func (n RegistryEvents) Less(i, j int) bool {
+	record1 := n.Events[i]
+	record2 := n.Events[j]
 
-	result := strings.Compare(record1.imageName, record2.imageName)
+	result := strings.Compare(record1.Target.Repository, record2.Target.Repository)
 	if result == 0 {
-		result = strings.Compare(record1.tag, record2.tag)
+		result = strings.Compare(record1.Target.Tag, record2.Target.Tag)
 	}
 	return result < 0
 
 }
 
-func (records tagRecords) Swap(i, j int) {
-	record1 := records[i]
-	record2 := records[j]
-	records[i] = record2
-	records[j] = record1
+func (n RegistryEvents) Swap(i, j int) {
+	record1 := n.Events[i]
+	record2 := n.Events[j]
+	n.Events[i] = record2
+	n.Events[j] = record1
 }
 
 func TestConsolidate(t *testing.T) {
@@ -320,9 +340,9 @@ func TestConsolidate(t *testing.T) {
 		handler   *tagAndPushRecorder
 	}
 	tests := []struct {
-		name    string
-		args    args
-		records tagRecords
+		name   string
+		args   args
+		events RegistryEvents
 	}{{"production filters", args{
 		mockRegistry{map[string][]string{
 			"production/tool1": {"0.1", "0.2"},
@@ -335,18 +355,15 @@ func TestConsolidate(t *testing.T) {
 			regExFilter("[\\d\\.]+")},
 		&tagAndPushRecorder{},
 	},
-		[]tagAndPushRecord{tagAndPushRecord{"production/tool1", "registry.dev.com",
-			"registry.production.com", "0.2"},
-			tagAndPushRecord{"production/tool2", "registry.dev.com",
-				"registry.production.com", "0.1"},
-		}}}
+		RegistryEvents{[]RegistryEvent{RegistryEvent{"missing", RegistryTarget{"production/tool1", "0.2"}}, RegistryEvent{"missing", RegistryTarget{"production/tool2", "0.1"}}}},
+	}}
 	for _, tt := range tests {
 		Convey("for consolidation of:"+tt.name, t, func() {
 			Consolidate(tt.args.regSource, tt.args.regTarget, tt.args.filter, tt.args.handler)
 			fmt.Printf("hander %v", tt.args.handler)
-			sort.Sort(tt.args.handler.records)
-			sort.Sort(tt.records)
-			So(tt.args.handler.records, ShouldResemble, tt.records)
+			sort.Sort(tt.args.handler.events)
+			sort.Sort(tt.events)
+			So(tt.args.handler.events.Events, ShouldResemble, tt.events.Events)
 		})
 	}
 }
