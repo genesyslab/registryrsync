@@ -8,29 +8,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-// RegistryEvent indication that some image changed in some way
-type RegistryEvent struct {
-	// TODO create an enum
-	Action string
-	Target RegistryTarget
-}
-
-// RegistryTarget Indicates the precise image
-type RegistryTarget struct {
-	Repository string
-	Tag        string
-}
-
-// RegistryEvents a single notification may have many events
-type RegistryEvents struct {
-	Events []RegistryEvent
-}
-
-// RegistryEventHandler how to process a registry event
-type RegistryEventHandler interface {
-	Handle(event RegistryEvent) error
-}
-
 func registryEventHandler(handler RegistryEventHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("Got new request")

@@ -30,6 +30,41 @@ type Registry interface {
 	Tags(string) ([]string, error)
 }
 
+// RegistryEvent indication that some image changed in some way
+type RegistryEvent struct {
+	// TODO create an enum
+	Action string
+	Target RegistryTarget
+}
+
+// RegistryTarget Indicates the precise image
+type RegistryTarget struct {
+	Repository string
+	Tag        string
+}
+
+// A collection of targets
+type RegistryTargets []RegistryTarget
+
+// RegistryEvents a single notification may have many events
+type RegistryEvents struct {
+	Events []RegistryEvent
+}
+
+// Transforms to registry targets.  Useful for sorting
+func (r RegistryEvents) getRegistryTargets() RegistryTargets {
+	targets := make([]RegistryTarget, 0, len(r.Events))
+	for _, evt := range r.Events {
+		targets = append(targets, evt.Target)
+	}
+	return targets
+}
+
+// RegistryEventHandler how to process a registry event
+type RegistryEventHandler interface {
+	Handle(event RegistryEvent) error
+}
+
 // GetRegistry gets an actual registry with repositories and tags
 func (r RegistryInfo) GetRegistry() (Registry, error) {
 	var protocol string
@@ -50,63 +85,5 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 		return nil, err
 	}
 	return reg, nil
-
-}
-
-//GetMatchingImages Finds the names and tags of all matching
-func GetMatchingImages(reg Registry, filter DockerImageFilter) ([]ImageIdentifier, error) {
-	matchingImages := make([]ImageIdentifier, 0, 10)
-
-	repos, err := reg.Repositories()
-	if err != nil {
-		fmt.Printf("cant get repositories from %s:%v. Got back %s", reg, err, repos)
-		return matchingImages, err
-	}
-	for _, repo := range repos {
-		if filter.repoFilter.Matches(repo) {
-			tags, err := reg.Tags(repo)
-			if err != nil {
-				log.Fatal("Unable to get tags", err)
-				return matchingImages, err
-			}
-			for _, tag := range tags {
-				if filter.tagFilter.Matches(tag) {
-					matchingImages = append(matchingImages, ImageIdentifier{repo, tag})
-				}
-			}
-		}
-	}
-	return matchingImages, nil
-}
-
-//Consolidate  finds the missing images in the target from the source and fires off events for those
-func Consolidate(rs, rt RegistryFactory, filter DockerImageFilter, handler RegistryEventHandler) error {
-	regSource, err := rs.GetRegistry()
-	if err != nil {
-		log.Errorf("Couldn't connect to source registry %v:%v", rs, err)
-	}
-	regTarget, err := rt.GetRegistry()
-	if err != nil {
-		log.Errorf("Couldn't connect to source registry %v:%v", rt, err)
-	}
-	//This could easily take a while and we want to at the least log the time it took. In reality should probably
-	//push a metric somewhere
-	log.Infof(">>Consolidate(%v,%v,%v", regSource, regTarget, filter)
-	defer log.Info("<<Consolidate")
-	sourceImages, err := GetMatchingImages(regSource, filter)
-	if err != nil {
-		log.Errorf("Couldn't get images from source repo %v : %v", regSource, err)
-		return err
-	}
-	targetImages, err := GetMatchingImages(regTarget, filter)
-	if err != nil {
-		log.Errorf("Couldn't get images from target repo %s : %s", regTarget, err)
-		return err
-	}
-	missingImages := missingImages(sourceImages, targetImages)
-	for _, image := range missingImages {
-		handler.Handle(RegistryEvent{"missing", RegistryTarget{image.Name, image.Tag}})
-	}
-	return nil
 
 }
