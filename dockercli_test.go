@@ -70,29 +70,34 @@ func TestFilteringOfARegistry(t *testing.T) {
 			sort.Sort(matches)
 			sort.Sort(expectedImages)
 			So(matches, ShouldResemble, expectedImages)
-			// Convey("We can push out to another registry the requested differences", func() {
-			// 	hostIP, port, closerReg2, err := internal.StartRegistry()
-			// 	So(err, ShouldBeNil)
-			// 	So(closer, ShouldNotBeNil)
-			// 	defer closerReg2()
-			// 	regInfo2 := RegistryInfo{address: hostIP + ":" + port}
-			// 	So(err, ShouldBeNil)
-			// 	imageHandler, err := NewDockerCLIHandler(regInfo, regInfo2)
-			// 	reg1, err := regInfo.GetRegistry()
-			// 	So(err, ShouldBeNil)
-			// 	reg2, err := regInfo2.GetRegistry()
-			// 	So(err, ShouldBeNil)
-			// 	err = Consolidate(reg1, reg2,
-			// 		DockerImageFilter{NewNamespaceFilter("mynamespace"), matchEverything{}}, imageHandler)
-			// 	So(err, ShouldBeNil)
-			// 	matches, err = GetMatchingImages(registry, allimageFilter)
-			// 	So(err, ShouldBeNil)
-			// 	expectedImages = []ImageIdentifier{
-			// 		ImageIdentifier{"mynamespace/alpine", "0.1"},
-			// 		ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
-			// 	}
-			// 	So(matches, ShouldResemble, expectedImages)
-			// })
+			Convey("We can push out to another registry the requested differences", func() {
+				hostIP, port, closerReg2, err := internal.StartRegistry()
+				//Even though we only get here when the registry is listening on port 5000
+				//it still would fail frequently but not always on a push.
+				//waiting a little seems to help
+				time.Sleep(1 * time.Second)
+				So(err, ShouldBeNil)
+				So(closer, ShouldNotBeNil)
+				defer closerReg2()
+				regInfo2 := RegistryInfo{address: hostIP + ":" + port}
+				So(err, ShouldBeNil)
+				imageHandler, err := NewDockerCLIHandler(regInfo, regInfo2)
+				reg1, err := regInfo.GetRegistry()
+				So(err, ShouldBeNil)
+				reg2, err := regInfo2.GetRegistry()
+				So(err, ShouldBeNil)
+				err = Consolidate(reg1, reg2,
+					DockerImageFilter{NewNamespaceFilter("mynamespace"), matchEverything{}}, imageHandler)
+				So(err, ShouldBeNil)
+				matches, err = GetMatchingImages(registry, allimageFilter)
+				So(err, ShouldBeNil)
+				expectedImages = RegistryTargets{
+					RegistryTarget{"mynamespace/alpine", "0.1"},
+					RegistryTarget{"mynamespace/busybox", "0.1-stable"},
+				}
+				sort.Sort(matches)
+				sort.Sort(expectedImages)
+			})
 		})
 	})
 }
