@@ -35,20 +35,20 @@ type puller interface {
 type tagger interface {
 	Tag(string, string) error
 }
-type source struct {
+type regSource struct {
 	puller
 	RegistryFactory
 }
-type target struct {
+type regTarget struct {
 	pusher
 	RegistryFactory
 }
 
 // ImageHandler - knows how to pull, push and tag images
 type ImageHandler struct {
-	source
-	target
-	tagger
+	source regSource
+	target regTarget
+	tagger tagger
 }
 
 func (i ImageHandler) Handle(evt RegistryEvent) error {
@@ -56,7 +56,7 @@ func (i ImageHandler) Handle(evt RegistryEvent) error {
 }
 
 func (i ImageHandler) PullTagPush(imageName, namespace, version string) error {
-	err := i.Pull(imageName)
+	err := i.source.Pull(imageName)
 	if err != nil {
 		log.Warnf("Couldn't pull down %s : %s", imageName, err)
 		return err
@@ -66,18 +66,21 @@ func (i ImageHandler) PullTagPush(imageName, namespace, version string) error {
 		version = "latest"
 	}
 	var remoteImgName string
+	log.Debugf("Target is %s version is %s", i.target, version)
+	fmt.Printf("Address is %s", i.target.Address())
 	if namespace != "" {
 		remoteImgName = fmt.Sprintf("%s/%s/%s:%s", i.target.Address(), namespace, imageName, version)
 	} else {
 		remoteImgName = fmt.Sprintf("%s/%s:%s", i.target.Address(), imageName, version)
 	}
+	log.Debugf("Taggin %s to %s", imageName, remoteImgName)
 
-	err = i.Tag(imageName, remoteImgName)
+	err = i.tagger.Tag(imageName, remoteImgName)
 	if err != nil {
 		log.Warnf("Couldn't pull down %s : %s", imageName, err)
 		return err
 	}
-	err = i.Push(remoteImgName)
+	err = i.target.Push(remoteImgName)
 	if err != nil {
 		log.Warnf("Couldn't push %s : %s", remoteImgName, err)
 		return err

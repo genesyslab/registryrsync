@@ -141,3 +141,32 @@ func (n RegistryTargets) Swap(i, j int) {
 	n[i] = record2
 	n[j] = record1
 }
+
+type matchEverything struct{}
+
+func (m matchEverything) Matches(name string) bool {
+	return true
+}
+
+type mockRegistry struct {
+	entries map[string][]string
+}
+
+func (m mockRegistry) GetRegistry() (Registry, error) {
+	return m, nil
+}
+func (m mockRegistry) Address() string {
+	return "mock://"
+}
+
+func (m mockRegistry) Repositories() ([]string, error) {
+	repos := []string{}
+	for r := range m.entries {
+		repos = append(repos, r)
+	}
+	return repos, nil
+}
+
+func (m mockRegistry) Tags(repo string) ([]string, error) {
+	return m.entries[repo], nil
+}

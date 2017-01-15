@@ -87,3 +87,7 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 	return reg, nil
 
 }
+
+func (r RegistryInfo) Address() string {
+	return r.address
+}

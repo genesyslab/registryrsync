@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -59,12 +60,15 @@ func TestFilteringOfARegistry(t *testing.T) {
 			allimageFilter := DockerImageFilter{matchEverything{}, matchEverything{}}
 			matches, err := GetMatchingImages(registry, allimageFilter)
 			So(err, ShouldBeNil)
-			expectedImages := []ImageIdentifier{
-				ImageIdentifier{"alpine", "0.1"},
-				ImageIdentifier{"alpine", "stable"},
-				ImageIdentifier{"mynamespace/alpine", "0.1"},
-				ImageIdentifier{"mynamespace/busybox", "0.1-stable"},
+			// var expecteImages RegistryTargets
+			expectedImages := RegistryTargets{
+				RegistryTarget{"alpine", "0.1"},
+				RegistryTarget{"alpine", "stable"},
+				RegistryTarget{"mynamespace/alpine", "0.1"},
+				RegistryTarget{"mynamespace/busybox", "0.1-stable"},
 			}
+			sort.Sort(matches)
+			sort.Sort(expectedImages)
 			So(matches, ShouldResemble, expectedImages)
 			// Convey("We can push out to another registry the requested differences", func() {
 			// 	hostIP, port, closerReg2, err := internal.StartRegistry()
@@ -91,33 +95,4 @@ func TestFilteringOfARegistry(t *testing.T) {
 			// })
 		})
 	})
-}
-
-type matchEverything struct{}
-
-func (m matchEverything) Matches(name string) bool {
-	return true
-}
-
-type mockRegistry struct {
-	entries map[string][]string
-}
-
-func (m mockRegistry) GetRegistry() (Registry, error) {
-	return m, nil
-}
-func (m mockRegistry) Address() string {
-	return "mock://"
-}
-
-func (m mockRegistry) Repositories() ([]string, error) {
-	repos := []string{}
-	for r := range m.entries {
-		repos = append(repos, r)
-	}
-	return repos, nil
-}
-
-func (m mockRegistry) Tags(repo string) ([]string, error) {
-	return m.entries[repo], nil
 }

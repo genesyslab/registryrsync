@@ -25,9 +25,10 @@ func NewDockerCLIHandler(source, target RegistryInfo) (handler ImageHandler, err
 	if err != nil {
 		return
 	}
-	handler.puller = s
-	handler.tagger = t
-	handler.pusher = t
+	// handler.source = source{&s, s.reg}
+	handler.source = regSource{&s, s.reg}
+	handler.tagger = &t
+	handler.target = regTarget{&t, t.reg}
 	return
 }
 
@@ -35,7 +36,7 @@ type dockerRegistryCLI struct {
 	reg RegistryInfo
 }
 
-func (d dockerRegistryCLI) login() error {
+func (d *dockerRegistryCLI) login() error {
 	if d.reg.password != "" {
 		loginCmd := exec.Command("docker", "login", "-u", d.reg.username, "-p", d.reg.password)
 		_, err := loginCmd.CombinedOutput()
@@ -53,7 +54,10 @@ type dockerCli struct {
 	regInfo RegistryInfo
 }
 
-func (d dockerRegistryCLI) Push(name string) error {
+func (d *dockerRegistryCLI) Push(name string) error {
+	log.Debugf(">>Push (%s) to %s", name, d.reg.address)
+	defer log.Debug("<<Pull")
+
 	targetAddr := d.reg.address
 	var remoteName string
 	if strings.Index(name, targetAddr) != 0 {
@@ -70,7 +74,10 @@ func (d dockerRegistryCLI) Push(name string) error {
 	return nil
 }
 
-func (d dockerRegistryCLI) Pull(name string) error {
+func (d *dockerRegistryCLI) Pull(name string) error {
+	log.Debugf(">>Pull (%s)", name)
+	defer log.Debug("<<Pull")
+
 	sourceAddr := d.reg.address
 	var remoteName string
 	if (sourceAddr != "") && (strings.Index(name, sourceAddr) != 0) {
@@ -84,10 +91,14 @@ func (d dockerRegistryCLI) Pull(name string) error {
 		log.Warnf("Error pull %s:%s  Output %s", pullCmd.Args, err, string(data))
 		return err
 	}
+	log.Debugf(">>Pull (%s)", name)
+
 	return nil
 }
 
-func (d dockerRegistryCLI) Tag(name, tag string) error {
+func (d *dockerRegistryCLI) Tag(name, tag string) error {
+	log.Debugf(">>Tag (%s,%s)", name, tag)
+	defer log.Debug("<<Tag")
 	tagCmd := exec.Command("docker", "tag", name, tag)
 	data, err := tagCmd.CombinedOutput()
 	if err != nil {
