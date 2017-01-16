@@ -16,24 +16,27 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/cobra/cobra/cmd"
 	"github.com/spf13/viper"
 )
 
 var cfgFile string
 
 func main() {
-	cmd.Execute()
+	RootCmd.Execute()
 }
 
+var debugLogging bool
 var registrySource, registryTarget RegistryInfo
-var tagFilter, namespaceFilter string
+var namespaces []string
+var tagRegexp string
 var pollingFrequency time.Duration
 var port int
 
@@ -44,20 +47,67 @@ var RootCmd = &cobra.Command{
 	Long: `
 
 	registrysync --source-url <registrysource>  --target-url
+
+	All settings can be overriden via enviornment variables prefixed with RR, e.g.
+	RR_SOURCE_URL
 	`,
+
+	// Set logging for all commands
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if debugLogging {
+			log.SetLevel(log.DebugLevel)
+		}
+	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-
 		if registrySource.address == "" {
-			cmd.Usage()
 			log.Error("No source registry address specified")
+			cmd.Usage()
 		}
 		if registryTarget.address == "" {
-			cmd.Usage()
 			log.Error("No target registry address specified")
 		}
+		var nameFilter, tagFilter Filter
+		if len(namespaces) == 0 {
+			nameFilter = matchEverything{}
+		} else {
+			nameFilter = NewNamespaceFilter(namespaces...)
+		}
+		if tagRegexp == "" {
+			tagRegexp = ".*"
+		}
+		tagFilter, err := NewRegexTagFilter(tagRegexp)
+		if err != nil {
+			log.Errorf("Can't create filter from bad regular expression %s", tagRegexp)
+			return
+		}
+		filter := DockerImageFilter{nameFilter, tagFilter}
+		handler, err := NewDockerCLIHandler(registrySource, registryTarget, filter)
+		if err != nil {
+			log.Errorf("Couldn't not connect to registries %s %s",
+				registrySource.Address(), registryTarget.Address())
+			return
+		}
 
+		if pollingFrequency > 0 {
+			go func() {
+				c := time.Tick(pollingFrequency)
+				for range c {
+					// Note this purposfully runs the function
+					// in the same goroutine so we make sure there is
+					// only ever one. If it might take a long time and
+					// it's safe to have several running just add "go" here.
+					err := handler.RSync(filter)
+					if err != nil {
+						log.Errorf("Failure syncing between registries %s %s", registrySource.Address(),
+							registryTarget.Address())
+					}
+				}
+			}()
+		}
+		http.Handle("/", registryEventHandler(handler))
+		http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 	},
 }
 
@@ -73,18 +123,21 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	RootCmd.PersistentFlags().StringVar(&registrySource.address, "source-url", "", "registry url to read images from")
-	RootCmd.PersistentFlags().StringVar(&registryTarget.address, "target-url", "", "registry url to send images to")
+	// TODO
+	RootCmd.Flags().StringVar(&registrySource.address, "source-url", "", "registry url to read images from")
+	RootCmd.Flags().StringVar(&registryTarget.address, "target-url", "", "registry url to send images to")
 
-	RootCmd.PersistentFlags().StringVar(&registryTarget.address, "source-user", "", "username for registry to read images from")
-	RootCmd.PersistentFlags().StringVar(&registryTarget.address, "target-user", "", "username for registry to send images to")
-	RootCmd.PersistentFlags().StringVar(&registryTarget.password, "source-password", "", "password for registry to read images from")
-	RootCmd.PersistentFlags().StringVar(&registryTarget.password, "target-password", "", "password for registry to send images to")
+	RootCmd.Flags().StringVar(&registryTarget.address, "source-user", "", "username for registry to read images from")
+	RootCmd.Flags().StringVar(&registryTarget.address, "target-user", "", "username for registry to send images to")
+	RootCmd.Flags().StringVar(&registryTarget.password, "source-password", "", "password for registry to read images from")
+	RootCmd.Flags().StringVar(&registryTarget.password, "target-password", "", "password for registry to send images to")
 
-	RootCmd.PersistentFlags().StringVar(&tagFilter, "tag-regex", ".*", "regular expression of tags to match")
-	RootCmd.PersistentFlags().StringVar(&namespaceFilter, "namespace-regex", ".*", "regex for the repositories and namespaces to match")
-
-	RootCmd.PersistentFlags().IntVar(&port, "port", 8787, "port to listen for notifications on")
+	RootCmd.Flags().StringVar(&tagRegexp, "tag-regex", ".*", "regular expression of tags to match")
+	// RootCmd.Flags().StringSliceP(&namespaces, "name", []string{}, "namespace to watch.  Can have multiple. Blank for all")
+	// RootCmd.Flags().Duration(&pollingFrequency, "poll", "Set to have a cron job setup to converge")
+	RootCmd.Flags().DurationVar(&pollingFrequency, "poll", 0, "How frequently should we check the registries")
+	RootCmd.Flags().IntVar(&port, "port", 8787, "port to listen for notifications on")
+	RootCmd.PersistentFlags().BoolVarP(&debugLogging, "d", "debug", false, "turn on debug")
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags, which, if defined here,
@@ -92,15 +145,6 @@ func init() {
 
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "registryrsync.yml", "config file (default is $HOME/.registryrsync.yaml)")
 
-	viperStringFlags := []string{"source-url",
-		"target-url", "source-user",
-		"target-user", "source-password", "target-password",
-		"tag-regex", "namespace-regex",
-	}
-
-	for _, flag := range viperStringFlags {
-		viper.BindPFlag(flag, RootCmd.PersistentFlags().Lookup(flag))
-	}
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -109,11 +153,24 @@ func initConfig() {
 		viper.SetConfigFile(cfgFile)
 	}
 
+	viperStringFlags := []string{"source-url",
+		"target-url", "source-user",
+		"target-user", "source-password", "target-password",
+		"tag-regex", "namespace-regex", "port",
+	}
+
+	for _, flag := range viperStringFlags {
+		viper.BindPFlag(flag, RootCmd.PersistentFlags().Lookup(flag))
+	}
+
+	//Allow us to use RR environment variables
+	replacer := strings.NewReplacer("-", "_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.SetEnvPrefix("rr")
+	viper.AutomaticEnv()
+
 	viper.SetConfigName("registryrsync.yml") // name of config file (without extension)
 	viper.AddConfigPath("$HOME")             // adding home directory as first search path
-
-	viper.SetEnvPrefix("rr") // will be uppercased automatically
-	viper.AutomaticEnv()     // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {

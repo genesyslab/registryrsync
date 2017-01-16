@@ -14,7 +14,7 @@ var DockerHubRegistry = RegistryInfo{}
 // NewDockerCLIHandler creates something that can pull, tag and push to docker
 // registries.  Note that if there is no address specified in the
 // source it is treated at the docker hub registry
-func NewDockerCLIHandler(source, target RegistryInfo) (handler ImageHandler, err error) {
+func NewDockerCLIHandler(source, target RegistryInfo, filter DockerImageFilter) (handler ImageHandler, err error) {
 	s := dockerRegistryCLI{source}
 	t := dockerRegistryCLI{target}
 	err = s.login()
@@ -29,6 +29,7 @@ func NewDockerCLIHandler(source, target RegistryInfo) (handler ImageHandler, err
 	handler.source = regSource{&s, s.reg}
 	handler.tagger = &t
 	handler.target = regTarget{&t, t.reg}
+	handler.filter = filter
 	return
 }
 

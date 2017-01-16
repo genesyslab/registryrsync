@@ -49,13 +49,20 @@ type ImageHandler struct {
 	source regSource
 	target regTarget
 	tagger tagger
+	filter DockerImageFilter
 }
 
 func (i ImageHandler) Handle(evt RegistryEvent) error {
-	return i.PullTagPush(evt.Target.Repository, "", evt.Target.Tag)
+	if i.filter.repoFilter.Matches(evt.Target.Repository) &&
+		i.filter.tagFilter.Matches(evt.Target.Tag) {
+		return i.PullTagPush(evt.Target.Repository, evt.Target.Tag)
+	}
+	return nil
 }
 
-func (i ImageHandler) PullTagPush(imageName, namespace, version string) error {
+func (i ImageHandler) PullTagPush(imageName, version string) error {
+	log.Infof(">>PullTagPush(%s,%s,%s)", imageName, version)
+	defer log.Infof("<<PullTagPush")
 	err := i.source.Pull(imageName)
 	if err != nil {
 		log.Warnf("Couldn't pull down %s : %s", imageName, err)
@@ -68,11 +75,7 @@ func (i ImageHandler) PullTagPush(imageName, namespace, version string) error {
 	var remoteImgName string
 	log.Debugf("Target is %s version is %s", i.target, version)
 	fmt.Printf("Address is %s", i.target.Address())
-	if namespace != "" {
-		remoteImgName = fmt.Sprintf("%s/%s/%s:%s", i.target.Address(), namespace, imageName, version)
-	} else {
-		remoteImgName = fmt.Sprintf("%s/%s:%s", i.target.Address(), imageName, version)
-	}
+	remoteImgName = fmt.Sprintf("%s/%s:%s", i.target.Address(), imageName, version)
 	log.Debugf("Taggin %s to %s", imageName, remoteImgName)
 
 	err = i.tagger.Tag(imageName, remoteImgName)
@@ -88,11 +91,24 @@ func (i ImageHandler) PullTagPush(imageName, namespace, version string) error {
 	return nil
 }
 
-//NamespaceFilter a filter for repositories
-//in a registry using a particular set of top level names.
-//these must be an exact match
-type NamespaceFilter struct {
-	namespaces map[string]struct{}
+func (i ImageHandler) RSync(filter DockerImageFilter) error {
+	s, err := i.source.GetRegistry()
+	if err != nil {
+		log.Errorf("Couldn't connec to registry %s : %s", i.source, err)
+		return err
+	}
+	t, err := i.target.GetRegistry()
+	if err != nil {
+		log.Errorf("Couldn't connec to registry %s : %s", i.target, err)
+		return err
+	}
+	return Consolidate(s, t, filter, i)
+}
+
+type matchEverything struct{}
+
+func (m matchEverything) Matches(name string) bool {
+	return true
 }
 
 // NewNamespaceFilter constructs a regex of a number of namespaces in a registry

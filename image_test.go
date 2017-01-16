@@ -142,12 +142,6 @@ func (n RegistryTargets) Swap(i, j int) {
 	n[j] = record1
 }
 
-type matchEverything struct{}
-
-func (m matchEverything) Matches(name string) bool {
-	return true
-}
-
 type mockRegistry struct {
 	entries map[string][]string
 }
