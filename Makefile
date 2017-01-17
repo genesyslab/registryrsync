@@ -41,7 +41,6 @@ buildtest:
 	go test ./$(PROJ_GO_SRC)
 
 buildgo:
-	go test --short ./$(PROJ_GO_SRC)
 	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o $(LINUXBINARY) ./$(PROJ_GO_SRC)
 
 buildlinux: vendor

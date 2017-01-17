@@ -136,8 +136,9 @@ func init() {
 	// RootCmd.Flags().StringSliceP(&namespaces, "name", []string{}, "namespace to watch.  Can have multiple. Blank for all")
 	// RootCmd.Flags().Duration(&pollingFrequency, "poll", "Set to have a cron job setup to converge")
 	RootCmd.Flags().DurationVar(&pollingFrequency, "poll", 0, "How frequently should we check the registries")
-	RootCmd.Flags().IntVar(&port, "port", 8787, "port to listen for notifications on")
-	RootCmd.PersistentFlags().BoolVarP(&debugLogging, "d", "debug", false, "turn on debug")
+	// RootCmd.Flags().IntVar(p, name, value, usage)
+	RootCmd.Flags().IntVar(&port, "port", 8787, "Port to  listen to notifications on")
+	RootCmd.PersistentFlags().BoolVarP(&debugLogging, "debug", "d", false, "turn on debug")
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports Persistent Flags, which, if defined here,
