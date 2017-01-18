@@ -39,10 +39,12 @@ type dockerRegistryCLI struct {
 
 func (d *dockerRegistryCLI) login() error {
 	if d.reg.password != "" {
-		loginCmd := exec.Command("docker", "login", "-u", d.reg.username, "-p", d.reg.password)
-		_, err := loginCmd.CombinedOutput()
+		loginCmd := exec.Command("docker", "login", d.reg.Address(),
+			"-u", d.reg.username, "-p", d.reg.password)
+		out, err := loginCmd.CombinedOutput()
 		if err != nil {
-			log.Warnf("Error logging in to %s with username %s :%s", d.reg.address, d.reg.username, err)
+			log.Warnf("Error logging in to %s with username %s :%s.  Output:\n%s",
+				d.reg.address, d.reg.username, err, out)
 			return err
 		}
 	} else {
@@ -108,51 +110,3 @@ func (d *dockerRegistryCLI) Tag(name, tag string) error {
 	}
 	return nil
 }
-
-//TagAndPush given a basic image name, will add it to the remote repository with the given tag
-//note that is assumed that for remote registries the url
-//ends in a /  (this allows us to use the same logic to pull from docker hub, although there
-//are definetly smarter ways
-// func (d dockerCli) PullTagPush(imageName, sourceReg, targetReg, tag string) error {
-// 	//
-// 	// imageParts := strings.Split(imageName, ":")
-// 	//
-// 	// var sourceImageAddr string
-// 	// if sourceReg == "" {
-// 	// 	sourceImageAddr = imageName
-// 	// } else {
-// 	// 	sourceImageAddr = fmt.Sprintf("%s/%s", sourceReg, imageName)
-// 	// }
-// 	//
-// 	// log.Debugf("Pulling %s", sourceImageAddr)
-// 	//
-// 	// // Should look into using gorouties and channels
-// 	// pullCmd := exec.Command("docker", "pull", sourceImageAddr)
-// 	// data, err := pullCmd.CombinedOutput()
-// 	// if err != nil {
-// 	// 	log.Printf("Error pulling %s:%s  Output %s", pullCmd.Args, err, string(data))
-// 	// 	return err
-// 	// }
-// 	//
-// 	// imageID := imageParts[0]
-// 	// if tag != "" {
-// 	// 	imageID += ":" + tag
-// 	// }
-// 	// remoteName := fmt.Sprintf("%s/%s", targetReg, imageID)
-// 	// err = tagImage(imageName, remoteName)
-// 	// if err != nil {
-// 	// 	log.Warnf("Error tagging %s - %s", remoteName, err)
-// 	// 	return err
-// 	// }
-// 	//
-// 	// log.Debugf("Pushing %s", remoteName)
-// 	//
-// 	// pushCmd := exec.Command("docker", "push", remoteName)
-// 	// data, err = pushCmd.CombinedOutput()
-// 	// if err != nil {
-// 	// 	log.Printf("Error pushing %s:%s  Output %s", pushCmd.Args, err, string(data))
-// 	// 	return err
-// 	// }
-// 	//
-// 	// return nil
-// }

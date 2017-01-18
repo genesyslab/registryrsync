@@ -75,7 +75,7 @@ func (r RegistryInfo) GetRegistry() (Registry, error) {
 	}
 
 	regURL := fmt.Sprintf("%s://%s", protocol, r.address)
-	log.Infof("Connecting to registry %s:%s", regURL)
+	log.Infof("Connecting to registry %s", regURL)
 
 	reg, err := registry.New(regURL, r.username, r.password)
 

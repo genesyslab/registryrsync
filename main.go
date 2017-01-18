@@ -64,9 +64,12 @@ var RootCmd = &cobra.Command{
 		if registrySource.address == "" {
 			log.Error("No source registry address specified")
 			cmd.Usage()
+			return
 		}
 		if registryTarget.address == "" {
 			log.Error("No target registry address specified")
+			cmd.Usage()
+			return
 		}
 		var nameFilter, tagFilter Filter
 		if len(namespaces) == 0 {
@@ -91,6 +94,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		if pollingFrequency > 0 {
+			log.Infof("Setting up cron job for every %s ", pollingFrequency.String())
 			go func() {
 				c := time.Tick(pollingFrequency)
 				for range c {
@@ -127,9 +131,9 @@ func init() {
 	RootCmd.Flags().StringVar(&registrySource.address, "source-url", "", "registry url to read images from")
 	RootCmd.Flags().StringVar(&registryTarget.address, "target-url", "", "registry url to send images to")
 
-	RootCmd.Flags().StringVar(&registryTarget.address, "source-user", "", "username for registry to read images from")
-	RootCmd.Flags().StringVar(&registryTarget.address, "target-user", "", "username for registry to send images to")
-	RootCmd.Flags().StringVar(&registryTarget.password, "source-password", "", "password for registry to read images from")
+	RootCmd.Flags().StringVar(&registrySource.username, "source-user", "", "username for registry to read images from")
+	RootCmd.Flags().StringVar(&registryTarget.username, "target-user", "", "username for registry to send images to")
+	RootCmd.Flags().StringVar(&registrySource.password, "source-password", "", "password for registry to read images from")
 	RootCmd.Flags().StringVar(&registryTarget.password, "target-password", "", "password for registry to send images to")
 
 	RootCmd.Flags().StringVar(&tagRegexp, "tag-regex", ".*", "regular expression of tags to match")

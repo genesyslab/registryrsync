@@ -56,14 +56,17 @@ func (i ImageHandler) Handle(evt RegistryEvent) error {
 	if i.filter.repoFilter.Matches(evt.Target.Repository) &&
 		i.filter.tagFilter.Matches(evt.Target.Tag) {
 		return i.PullTagPush(evt.Target.Repository, evt.Target.Tag)
+	} else {
+		log.Debugf("Ignoring change  %s", evt)
 	}
 	return nil
 }
 
 func (i ImageHandler) PullTagPush(imageName, version string) error {
-	log.Infof(">>PullTagPush(%s,%s,%s)", imageName, version)
+
+	log.Infof(">>PullTagPush(%s:%s)", imageName, version)
 	defer log.Infof("<<PullTagPush")
-	err := i.source.Pull(imageName)
+	err := i.source.Pull(fmt.Sprintf("%s:%s", imageName, version))
 	if err != nil {
 		log.Warnf("Couldn't pull down %s : %s", imageName, err)
 		return err
@@ -73,8 +76,6 @@ func (i ImageHandler) PullTagPush(imageName, version string) error {
 		version = "latest"
 	}
 	var remoteImgName string
-	log.Debugf("Target is %s version is %s", i.target, version)
-	fmt.Printf("Address is %s", i.target.Address())
 	remoteImgName = fmt.Sprintf("%s/%s:%s", i.target.Address(), imageName, version)
 	log.Debugf("Taggin %s to %s", imageName, remoteImgName)
 
@@ -150,6 +151,7 @@ func NewRegexTagFilter(regex string) (*RegexTagFilter, error) {
 
 //GetMatchingImages Finds the names and tags of all matching
 func GetMatchingImages(reg Registry, filter DockerImageFilter) (RegistryTargets, error) {
+	log.Debugf(">> GetMatchingImages(%+v, %+v)", reg, filter)
 	matchingImages := make([]RegistryTarget, 0, 10)
 	repos, err := reg.Repositories()
 	if err != nil {
@@ -164,10 +166,15 @@ func GetMatchingImages(reg Registry, filter DockerImageFilter) (RegistryTargets,
 				return matchingImages, err
 			}
 			for _, tag := range tags {
+				log.Debugf("Looking at tag %s", tag)
 				if filter.tagFilter.Matches(tag) {
 					matchingImages = append(matchingImages, RegistryTarget{repo, tag})
+				} else {
+					log.Debug("Ignoring image from repo %s with tag %s", repo, tag)
 				}
 			}
+		} else {
+			log.Debugf("Ignoring repo %s", repo)
 		}
 	}
 	return matchingImages, nil
@@ -192,7 +199,7 @@ func missingImages(source, target RegistryTargets) RegistryTargets {
 func Consolidate(regSource, regTarget Registry, filter DockerImageFilter, handler RegistryEventHandler) error {
 	//This could easily take a while and we want to at the least log the time it took. In reality should probably
 	//push a metric somewhere
-	log.Infof(">>Consolidate(%v,%v,%v", regSource, regTarget, filter)
+	log.Infof(">>Consolidate(%s,%+v,%+v", regSource, regTarget, filter)
 	defer log.Info("<<Consolidate")
 	sourceImages, err := GetMatchingImages(regSource, filter)
 	if err != nil {
