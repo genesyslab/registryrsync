@@ -13,13 +13,13 @@ node {
       }
    }
 
+   imageName = 'infra/registryrsync'
    stage "build"
-  sh 'make builddocker'
-
-
+   withEnv(["DOCKER_TAG=${imageName}"]) {
+     sh 'make builddocker'
+   }
 
    stage 'push'
-   imageName = 'registryrsync'
    docker.withRegistry(env.DOCKER_REG + "/infra", env.DOCKER_REG_CRED_ID) {
      docker.image(imageName).push('latest')
    }
