@@ -23,7 +23,8 @@ RUN apk add --no-cache --update ca-certificates curl \
   && mv ./docker/docker /usr/local/bin \
   && rm -rf ./docker
 
-ADD $LINUXBINARY /
+ADD registryrsync-linux /registryrsync
+RUN chmod 755 /registryrsync
 
 WORKDIR /data
-ENTRYPOINT "/$LINUXBINARY"
+ENTRYPOINT "/registryrsync"

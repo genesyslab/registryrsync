@@ -12,6 +12,8 @@ export LINUXBINARY=registryrsync-linux
 $(BINARY): $(SOURCES) vendor
 	go build ${LDFLAGS} -o ${BINARY} $(ROOT_SOURCES)
 
+echo:
+	echo Docker tag is $(DOCKER_TAG)
 vendor:
 	glide install
 
