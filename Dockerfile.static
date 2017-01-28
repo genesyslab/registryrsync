@@ -27,4 +27,4 @@ ADD registryrsync-linux /registryrsync
 RUN chmod 755 /registryrsync
 
 WORKDIR /data
-ENTRYPOINT "/registryrsync"
+ENTRYPOINT ["/registryrsync"]
