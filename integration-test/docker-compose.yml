@@ -1,0 +1,37 @@
+version: '2'
+services:
+  registryrsync:
+    network_mode: host
+
+    image: registryrsync
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    command: --poll 5s --target-url localhost:5888 --target-user testuser --target-password password --source-url localhost:6000
+  proxy:
+    image: nginx
+    links:
+    - registry
+    ports:
+    - 8080:80
+    volumes:
+    - .htpasswd:/etc/nginx/.htpasswd:ro
+    - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  registry:
+    restart: always
+    image: registry:2
+    ports:
+    - 5000:5000
+    - 5001:5001
+    environment:
+      REGISTRY_LOG_LEVEL: debug
+      REGISTRY_HTTP_HOST: http://localhost:5000 
+      SETTINGS_FLAVOR: local
+      STORAGE_PATH: /var/lib/docker/registry
+  registrysource:
+    restart: always
+    image: registry:2
+    ports:
+    - 6000:5000
+    environment:
+      SETTINGS_FLAVOR: local
+      STORAGE_PATH: /var/lib/docker/registry

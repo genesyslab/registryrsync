@@ -1,0 +1,18 @@
+
+#!/bin/bash
+
+BASEDIR=/tmp/batchpiper_tests_$$
+OUTDIR=$BASEDIR/output
+INDIR=$BASEDIR/input
+RANDOM_STRING=$(cat /dev/urandom | LC_CTYPE=C tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+
+# pass all of the vars on to the bats test files
+export IMAGE BASEDIR OUTDIR INDIR RANDOM_STRING
+# did we ask to run specific ones?
+if [[ -n "$@" ]]; then
+	ARGS="$@"
+else
+	ARGS="*.bats"
+fi
+
+bats $ARGS

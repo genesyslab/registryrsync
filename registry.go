@@ -8,6 +8,7 @@ import (
 
 	"github.com/heroku/docker-registry-client/registry"
 	//	"github.com/docker/distribution/manifest"
+	"regexp"
 )
 
 // RegistryInfo connection information to speak with a docker registry
@@ -65,16 +66,23 @@ type RegistryEventHandler interface {
 	Handle(event RegistryEvent) error
 }
 
+var protocolRegex = regexp.MustCompile("https?")
+
 // GetRegistry gets an actual registry with repositories and tags
 func (r RegistryInfo) GetRegistry() (Registry, error) {
-	var protocol string
-	if strings.Index(r.address, "localhost") == 0 {
-		protocol = "http"
+	var regURL string
+	if protocolRegex.Match([]byte(r.address)) {
+		regURL = r.address
 	} else {
-		protocol = "https"
+		var protocol string
+		if strings.Index(r.address, "localhost") == 0 {
+			protocol = "http"
+		} else {
+			protocol = "https"
+		}
+		regURL = fmt.Sprintf("%s://%s", protocol, r.address)
 	}
 
-	regURL := fmt.Sprintf("%s://%s", protocol, r.address)
 	log.Infof("Connecting to registry %s", regURL)
 
 	reg, err := registry.New(regURL, r.username, r.password)
