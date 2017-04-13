@@ -19,3 +19,8 @@ Flags:
       --target-user string       username for registry to send images to
 registryrsync(cleanup) $
 ```
+
+You can also run this with docker, but as it uses the cli undeyr the covers you'll need to expose the docker socket
+
+
+`docker run -v /var/run/docker.sock:/var/run/docker.sock registry.lab.arch.genesys.com/infra/registryrsync `
