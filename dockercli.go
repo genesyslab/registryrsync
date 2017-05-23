@@ -58,13 +58,15 @@ type dockerCli struct {
 }
 
 func (d *dockerRegistryCLI) Push(name string) error {
+
 	log.Debugf(">>Push (%s) to %s", name, d.reg.address)
 	defer log.Debug("<<Pull")
-
 	targetAddr := d.reg.address
 	var remoteName string
 	if strings.Index(name, targetAddr) != 0 {
 		remoteName = fmt.Sprintf("%s/%s", targetAddr, name)
+		log.Debugf("No remote address added.  Tagging to add %s", remoteName)
+		d.Tag(name, remoteName)
 	} else {
 		remoteName = name
 	}

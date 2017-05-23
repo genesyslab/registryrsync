@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/genesyslab/registryrsync/internal"
-
 	log "github.com/Sirupsen/logrus"
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -32,10 +30,10 @@ func TestFilteringOfARegistry(t *testing.T) {
 	}
 	Convey("Given a simple but real registry", t, func() {
 
-		hostIP, port, closer, err := internal.StartRegistry()
+		hostIP, port, closer, err := startRegistry()
 		So(err, ShouldBeNil)
 		So(closer, ShouldNotBeNil)
-		defer closer()
+		// defer closer()
 
 		regInfo := RegistryInfo{address: hostIP + ":" + port}
 		//Even though we only get here when the registry is listening on port 5000
@@ -49,12 +47,13 @@ func TestFilteringOfARegistry(t *testing.T) {
 			allimageFilter := DockerImageFilter{matchEverything{}, matchEverything{}}
 			imageHandler, err := NewDockerCLIHandler(DockerHubRegistry, regInfo, allimageFilter)
 			So(err, ShouldBeNil)
-			err = imageHandler.PullTagPush("alpine", "stable")
+			err = imageHandler.PullTagPush("alpine", "latest")
 			So(err, ShouldBeNil)
 			err = imageHandler.tagger.Tag("alpine", "mynamespace/alpine:0.1")
 			So(err, ShouldBeNil)
 			err = imageHandler.target.Push("mynamespace/alpine:0.1")
 			So(err, ShouldBeNil)
+			log.Debug("Pushed namespaced alpine")
 			err = imageHandler.tagger.Tag("alpine", "alpine:0.1")
 			So(err, ShouldBeNil)
 			err = imageHandler.target.Push("alpine:0.1")
@@ -70,7 +69,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 			// var expecteImages RegistryTargets
 			expectedImages := RegistryTargets{
 				RegistryTarget{"alpine", "0.1"},
-				RegistryTarget{"alpine", "stable"},
+				RegistryTarget{"alpine", "latest"},
 				RegistryTarget{"mynamespace/alpine", "0.1"},
 				RegistryTarget{"mynamespace/busybox", "0.1-stable"},
 			}
@@ -78,7 +77,7 @@ func TestFilteringOfARegistry(t *testing.T) {
 			sort.Sort(expectedImages)
 			So(matches, ShouldResemble, expectedImages)
 			Convey("We can push out to another registry the requested differences", func() {
-				hostIP, port, closerReg2, err := internal.StartRegistry()
+				hostIP, port, closerReg2, err := startRegistry()
 				//Even though we only get here when the registry is listening on port 5000
 				//it still would fail frequently but not always on a push.
 				//waiting a little seems to help

@@ -1,4 +1,4 @@
-package internal
+package main
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
-//StartRegistry - starts a new registry, returning the ip port combination
+//startRegistry - starts a new registry, returning the ip port combination
 //and a closing function that you should use for cleanup.
 //Error of course if there is a problem
-func StartRegistry() (hostIP, port string, deferFn func(), err error) {
+func startRegistry() (hostIP, port string, deferFn func(), err error) {
 	client, err := docker.NewClientFromEnv()
 	c, err := client.CreateContainer(createOptions())
 	log.Debugf("Container created %+v", c)
